@@ -3,9 +3,10 @@ import { useEffect, useState, useRef } from 'react';
 import { ShiftChangeModal, SwapRequestModal } from './ShiftRequestsModals';
 import StatCard from './Shared/StatCard';
 import EmployeeSearch from './Shared/EmployeeSearch';
-import MiniScheduleCalendar from './Shared/MiniScheduleCalendar';
+import MiniScheduleCalendar from './Shared/MiniScheduleCalendarNew';
 import ShiftView from './ShiftView';
-import { LogOut, RefreshCw, Calendar as CalendarIcon, Edit3, ArrowLeftRight, Eye, Search as SearchIcon, CalendarDays, Umbrella, CheckCircle2 } from 'lucide-react';
+import EmployeeProfileModal from './EmployeeProfileModal';
+import { LogOut, RefreshCw, Calendar as CalendarIcon, Edit3, ArrowLeftRight, Eye, Search as SearchIcon, CalendarDays, Umbrella, CheckCircle2, Settings, ArrowLeft } from 'lucide-react';
 
 /**
  * This is your backup ClientDashboard with ONLY the required additions:
@@ -66,6 +67,7 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
   const [showChange,setShowChange]=useState(false);
   const [showSwap,setShowSwap]=useState(false);
   const [showShiftView,setShowShiftView]=useState(false);
+  const [showProfile,setShowProfile]=useState(false);
   const [headers,setHeaders]=useState<string[]>([]);
   const [mySchedule,setMySchedule]=useState<string[]>([]);
   const [refreshing,setRefreshing]=useState(false);
@@ -277,6 +279,27 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
       }}>
         <div style={{maxWidth: '1400px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
           <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
+            {isOther && (
+              <button
+                onClick={resetToMySchedule}
+                style={{
+                  padding: '8px 12px',
+                  background: '#3b82f6',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  marginRight: '12px'
+                }}
+              >
+                <ArrowLeft size={16} /> Back to My Schedule
+              </button>
+            )}
             {tenantInfo?.logo_url && (
               <img src={tenantInfo.logo_url} alt={tenantInfo.organization_name} style={{width: '40px', height: '40px', objectFit: 'contain', borderRadius: '6px'}} />
             )}
@@ -295,6 +318,9 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
             <button onClick={refreshAll} disabled={refreshing} style={{padding: '8px 12px', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: '6px', cursor: refreshing ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', color: '#374151'}}>
               <RefreshCw size={16} style={{animation: refreshing ? 'spin 1s linear infinite' : 'none'}} />
               {refreshing ? 'Refreshing...' : 'Refresh'}
+            </button>
+            <button onClick={()=>setShowProfile(true)} style={{padding: '8px 12px', background: '#6b7280', border: 'none', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', color: '#fff', fontWeight: 500}}>
+              <Settings size={16} /> Settings
             </button>
             <button onClick={onLogout} style={{padding: '8px 16px', background: '#ef4444', border: 'none', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', color: '#fff', fontWeight: 500}}>
               <LogOut size={16} /> Logout
@@ -651,6 +677,16 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
           onClose={()=>setShowShiftView(false)}
           roster={roster}
           headers={headers}
+        />
+      )}
+      
+      {baseData && (
+        <EmployeeProfileModal
+          open={showProfile}
+          onClose={()=>setShowProfile(false)}
+          employeeId={employeeId}
+          employeeName={baseData.employee.name}
+          employeeTeam={baseData.employee.team}
         />
       )}
       
