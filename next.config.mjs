@@ -3,6 +3,9 @@ const nextConfig = {
   experimental: {
     serverActions: {
       allowedOrigins: ["localhost:3000"]
+    },
+    turbo: {
+      root: '.'
     }
   }
 };
