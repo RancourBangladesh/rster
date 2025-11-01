@@ -285,27 +285,6 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
       }}>
         <div style={{maxWidth: '1400px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
           <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
-            {isOther && (
-              <button
-                onClick={resetToMySchedule}
-                style={{
-                  padding: '8px 12px',
-                  background: '#3b82f6',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  marginRight: '12px'
-                }}
-              >
-                <ArrowLeft size={16} /> Back to My Schedule
-              </button>
-            )}
             {tenantInfo?.logo_url && (
               <img src={tenantInfo.logo_url} alt={tenantInfo.organization_name} style={{width: '40px', height: '40px', objectFit: 'contain', borderRadius: '6px'}} />
             )}
@@ -509,6 +488,37 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
                   <div style={{fontSize: '13px', color: '#6b7280', marginTop: '4px'}}>
                     Shift Code: {selectedShift || 'N/A'}
                   </div>
+                  
+                  {/* Show schedule change if any for this date */}
+                  {!isOther && (() => {
+                    const change = getShiftChangeForDate(selectedDate);
+                    if (change) {
+                      return (
+                        <div style={{
+                          marginTop: '12px',
+                          padding: '12px',
+                          background: '#dbeafe',
+                          border: '1px solid #93c5fd',
+                          borderRadius: '6px'
+                        }}>
+                          <div style={{fontSize: '12px', fontWeight: 600, color: '#1e40af', marginBottom: '4px'}}>
+                            Schedule Change Applied
+                          </div>
+                          <div style={{fontSize: '13px', color: '#1e3a8a'}}>
+                            Original: <span style={{textDecoration: 'line-through'}}>{change.current_shift || change.requester_shift}</span>
+                            {' → '}
+                            <span style={{fontWeight: 600}}>{SHIFT_MAP[selectedShift] || selectedShift}</span>
+                          </div>
+                          {change.type === 'swap' && change.target_employee_name && (
+                            <div style={{fontSize: '12px', color: '#3730a3', marginTop: '4px'}}>
+                              Swapped with: {change.target_employee_name}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
               )}
 
@@ -534,7 +544,7 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
                     <CalendarIcon size={16} /> {showCalendar ? 'Hide Calendar' : 'Show Calendar'}
                   </button>
                   {showCalendar && (
-                    <div style={{marginTop: '16px'}}>
+                    <div style={{marginTop: '16px', maxWidth: '298px'}}>
                       <MonthCompactCalendar 
                         headers={headers}
                         selectedDate={selectedDate}
@@ -675,21 +685,6 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
                   details={baseData.shift_changes}
                   detailsType="changes"
                 />
-                {approvedRequests.length > 0 && (
-                  <StatCard
-                    icon={<CheckCircle2 size={18} />}
-                    value={approvedRequests.length}
-                    label="Approved Shifts"
-                    subtitle="Approved requests"
-                    details={approvedRequests.map(r => ({
-                      date: r.date,
-                      type: r.type,
-                      original_shift: r.current_shift || r.requester_shift || 'N/A',
-                      current_shift: r.requested_shift || r.target_shift || 'N/A'
-                    }))}
-                    detailsType="changes"
-                  />
-                )}
               </div>
             )}
           </>
