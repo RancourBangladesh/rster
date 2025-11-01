@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { findEmployeeTenant, getEmployeeCredential, saveEmployeeCredential } from '@/lib/employeeAuth';
+import { findEmployeeTenant, getTenantEmployeeCredentials, saveTenantEmployeeCredentials, getEmployeeCredentials, saveEmployeeCredentials } from '@/lib/employeeAuth';
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,8 +15,13 @@ export async function POST(req: NextRequest) {
     // Find which tenant this employee belongs to
     const tenantId = findEmployeeTenant(employeeId);
     
-    // Get current credentials
-    const credential = getEmployeeCredential(employeeId, tenantId);
+    // Get credentials based on tenant
+    const credentials = tenantId 
+      ? getTenantEmployeeCredentials(tenantId)
+      : getEmployeeCredentials();
+    
+    // Find the employee's credential
+    const credential = credentials.credentials.find(c => c.employee_id === employeeId);
     
     if (!credential) {
       return NextResponse.json(
@@ -42,13 +47,15 @@ export async function POST(req: NextRequest) {
     }
 
     // Update password
-    const updatedCredential = {
-      ...credential,
-      password: newPassword,
-      updated_at: new Date().toISOString()
-    };
+    credential.password = newPassword;
+    credential.last_updated = new Date().toISOString();
 
-    saveEmployeeCredential(employeeId, updatedCredential, tenantId);
+    // Save credentials based on tenant
+    if (tenantId) {
+      saveTenantEmployeeCredentials(tenantId, credentials);
+    } else {
+      saveEmployeeCredentials(credentials);
+    }
 
     return NextResponse.json({
       success: true,

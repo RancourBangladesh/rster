@@ -3,10 +3,10 @@ import { useEffect, useState, useRef } from 'react';
 import { ShiftChangeModal, SwapRequestModal } from './ShiftRequestsModals';
 import StatCard from './Shared/StatCard';
 import EmployeeSearch from './Shared/EmployeeSearch';
-import MiniScheduleCalendar from './Shared/MiniScheduleCalendarNew';
+import MonthCompactCalendar from './Shared/MonthCompactCalendar';
 import ShiftView from './ShiftView';
 import EmployeeProfileModal from './EmployeeProfileModal';
-import { LogOut, RefreshCw, Calendar as CalendarIcon, Edit3, ArrowLeftRight, Eye, Search as SearchIcon, CalendarDays, Umbrella, CheckCircle2, Settings, ArrowLeft } from 'lucide-react';
+import { SHIFT_MAP } from '@/lib/constants';
 
 /**
  * This is your backup ClientDashboard with ONLY the required additions:
@@ -370,6 +370,50 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
 
         {!loading && activeData &&
           <>
+            {/* Viewing Info Banner - Show whose schedule is being displayed */}
+            {isOther && otherData && (
+              <div style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                color: '#fff',
+                padding: '16px 24px',
+                borderRadius: '12px',
+                marginBottom: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                boxShadow: '0 4px 6px rgba(102, 126, 234, 0.3)'
+              }}>
+                <div>
+                  <div style={{fontSize: '13px', opacity: 0.9, marginBottom: '4px'}}>Currently Viewing</div>
+                  <div style={{fontSize: '20px', fontWeight: 700}}>
+                    {otherData.employee.name}'s Schedule
+                  </div>
+                  <div style={{fontSize: '14px', opacity: 0.85, marginTop: '2px'}}>
+                    {otherData.employee.team} • ID: {otherData.employee.id}
+                  </div>
+                </div>
+                <button
+                  onClick={resetToMySchedule}
+                  style={{
+                    padding: '10px 20px',
+                    background: 'rgba(255, 255, 255, 0.2)',
+                    border: '1px solid rgba(255, 255, 255, 0.3)',
+                    borderRadius: '8px',
+                    color: '#fff',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    backdropFilter: 'blur(10px)'
+                  }}
+                >
+                  <ArrowLeft size={16} /> Back to My Schedule
+                </button>
+              </div>
+            )}
+
             {/* Today & Tomorrow Cards - Side by Side */}
             <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginBottom: '24px'}}>
               {/* Today's Shift Card */}
@@ -458,7 +502,12 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
                 }}>
                   <div style={{fontSize: '13px', fontWeight: 600, color: '#6b7280', marginBottom: '6px'}}>Selected Date</div>
                   <div style={{fontSize: '18px', fontWeight: 600, color: '#111827'}}>{selectedDate}</div>
-                  <div style={{fontSize: '24px', fontWeight: 700, color: '#3b82f6', marginTop: '4px'}}>{selectedShift || 'N/A'}</div>
+                  <div style={{fontSize: '24px', fontWeight: 700, color: '#3b82f6', marginTop: '4px'}}>
+                    {SHIFT_MAP[selectedShift] || selectedShift || 'N/A'}
+                  </div>
+                  <div style={{fontSize: '13px', color: '#6b7280', marginTop: '4px'}}>
+                    Shift Code: {selectedShift || 'N/A'}
+                  </div>
                 </div>
               )}
 
@@ -485,11 +534,12 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
                   </button>
                   {showCalendar && (
                     <div style={{marginTop: '16px'}}>
-                      <MiniScheduleCalendar 
+                      <MonthCompactCalendar 
                         headers={headers}
-                        schedule={activeScheduleArray}
                         selectedDate={selectedDate}
-                        onSelect={(d,s)=>onCalendarSelect(d,s)}
+                        onSelect={(d)=>onCalendarSelect(d, activeScheduleArray[headers.indexOf(d)] || '')}
+                        showWeekdays={true}
+                        showNavigation={true}
                       />
                     </div>
                   )}
