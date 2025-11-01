@@ -15,6 +15,9 @@ dist/
 # Production
 /build
 
+# Data files
+data/
+
 # Misc
 .DS_Store
 *.pem
