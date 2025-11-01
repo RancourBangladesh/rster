@@ -6,6 +6,7 @@ import EmployeeSearch from './Shared/EmployeeSearch';
 import MonthCompactCalendar from './Shared/MonthCompactCalendar';
 import ShiftView from './ShiftView';
 import EmployeeProfileModal from './EmployeeProfileModal';
+import { LogOut, RefreshCw, Calendar as CalendarIcon, Edit3, ArrowLeftRight, Eye, Search as SearchIcon, CalendarDays, Umbrella, CheckCircle2, Settings, ArrowLeft } from 'lucide-react';
 import { SHIFT_MAP } from '@/lib/constants';
 
 /**
