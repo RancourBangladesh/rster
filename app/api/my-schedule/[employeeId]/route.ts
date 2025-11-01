@@ -103,7 +103,7 @@ export async function GET(_: NextRequest, { params }:{params:{employeeId:string}
   }
 
   // shift changes from modified_shifts.json (current month only)
-  const modifiedShifts = getModifiedShifts();
+  const modifiedShifts = tenantId ? getModifiedShiftsForTenant(tenantId) : getModifiedShifts();
   const changes:any[] = [];
   
   // Get current month-year in format YYYY-MM

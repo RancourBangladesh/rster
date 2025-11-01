@@ -120,7 +120,12 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
 
   async function loadRoster() {
     try {
-      const res = await fetch('/api/admin/get-display-data', { cache: 'no-store' }).then(r=>r.json());
+      const res = await fetch('/api/employee/get-roster-data', { 
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({employeeId}),
+        cache: 'no-store' 
+      }).then(r=>r.json());
       setRoster(res);
       setHeaders(res.headers||[]);
       const teamEntry = Object.entries(res.teams||{}).find(([,list]:any)=> list.some((e:any)=> e.id===employeeId));
