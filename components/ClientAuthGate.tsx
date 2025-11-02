@@ -9,8 +9,32 @@ export default function ClientAuthGate({onSuccess}:{onSuccess:(fullName:string,i
   const [password,setPassword]=useState('');
   const [msg,setMsg]=useState('');
   const [loading,setLoading]=useState(false);
+  const [tenantInfo, setTenantInfo] = useState<{name: string; organizationName: string} | null>(null);
 
   useEffect(()=>{
+    // Check if accessed via subdomain to get tenant info
+    const hostname = window.location.hostname;
+    const parts = hostname.split('.');
+    
+    if (parts.length >= 3 && parts[0] !== 'www') {
+      // Looks like a subdomain, fetch tenant info
+      const subdomain = parts[0];
+      fetch('/api/tenant/info-by-slug', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({slug: subdomain})
+      }).then(res => res.json()).then(data => {
+        if (data.success && data.tenant) {
+          setTenantInfo({
+            name: data.tenant.name,
+            organizationName: data.tenant.organization_name || data.tenant.name
+          });
+        }
+      }).catch(err => {
+        console.error('Failed to fetch tenant info:', err);
+      });
+    }
+
     const savedUser = localStorage.getItem('rosterViewerUser');
     const savedAuth = localStorage.getItem('rosterViewerAuth');
     if (savedUser && savedAuth) {
@@ -76,6 +100,9 @@ export default function ClientAuthGate({onSuccess}:{onSuccess:(fullName:string,i
     }
   }
 
+  const brandName = tenantInfo?.organizationName || 'RosterBhai';
+  const portalName = tenantInfo ? `${brandName} Employee Portal` : 'Employee Schedule Portal';
+
   return (
     <div className="auth-screen">
       <div className="auth-container">
@@ -83,8 +110,8 @@ export default function ClientAuthGate({onSuccess}:{onSuccess:(fullName:string,i
           <div className="brand-icon">
             <Logo size={50} />
           </div>
-          <h1>RosterBhai</h1>
-          <p className="subtitle">Employee Schedule Portal</p>
+          <h1>{brandName}</h1>
+          <p className="subtitle">{portalName}</p>
         </div>
         
         <form onSubmit={submit} className="auth-form">
@@ -93,13 +120,15 @@ export default function ClientAuthGate({onSuccess}:{onSuccess:(fullName:string,i
             <input 
               value={employeeId} 
               onChange={e=>setEmployeeId(e.target.value)} 
-              placeholder="tenant@employeeID or just employeeID"
+              placeholder={tenantInfo ? "Enter your employee ID" : "tenant@employeeID or just employeeID"}
               disabled={loading}
               autoFocus
             />
-            <small style={{color: '#666', fontSize: '13px', marginTop: '4px', display: 'block'}}>
-              Format: <code style={{background: '#f5f5f5', padding: '2px 6px', borderRadius: '3px'}}>tenant@121</code> or just <code style={{background: '#f5f5f5', padding: '2px 6px', borderRadius: '3px'}}>121</code>
-            </small>
+            {!tenantInfo && (
+              <small style={{color: '#666', fontSize: '13px', marginTop: '4px', display: 'block'}}>
+                Format: <code style={{background: '#f5f5f5', padding: '2px 6px', borderRadius: '3px'}}>tenant@121</code> or just <code style={{background: '#f5f5f5', padding: '2px 6px', borderRadius: '3px'}}>121</code>
+              </small>
+            )}
           </div>
           <div className="form-group">
             <label>Password</label>
@@ -121,7 +150,7 @@ export default function ClientAuthGate({onSuccess}:{onSuccess:(fullName:string,i
         
         <div className="auth-info-box">
           <Info size={16} style={{display: 'inline-block', verticalAlign: 'middle', marginRight: '0.5rem'}} />
-          <strong>Default password:</strong> Your employee ID. For multi-tenant systems, use format: tenant@employeeID
+          <strong>Default password:</strong> Your employee ID{!tenantInfo && '. For multi-tenant systems, use format: tenant@employeeID'}
         </div>
       </div>
     </div>
