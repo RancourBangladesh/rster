@@ -1,35 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-
-/**
- * Extract tenant slug from subdomain
- * e.g., rancour.rosterbhai.me -> rancour
- * localhost or 127.0.0.1 returns null (no tenant)
- */
-function getTenantFromHostname(hostname: string): string | null {
-  // Skip localhost and IP addresses
-  if (hostname === 'localhost' || hostname.startsWith('127.0.0.1') || hostname.startsWith('192.168.')) {
-    return null;
-  }
-  
-  const parts = hostname.split('.');
-  
-  // If we have a subdomain (e.g., tenant.domain.com or tenant.domain.co.uk)
-  // We want at least 3 parts for a subdomain
-  if (parts.length >= 3) {
-    // The first part is the tenant slug
-    const subdomain = parts[0];
-    
-    // Ignore common subdomains that aren't tenants
-    if (subdomain === 'www' || subdomain === 'api' || subdomain === 'admin' || subdomain === 'developer') {
-      return null;
-    }
-    
-    return subdomain;
-  }
-  
-  return null;
-}
+import { getSubdomainFromHostname } from './lib/subdomain';
 
 export function middleware(req: NextRequest) {
   const url = req.nextUrl;
@@ -37,7 +8,7 @@ export function middleware(req: NextRequest) {
   const hostname = req.headers.get('host') || '';
   
   // Extract tenant slug from subdomain
-  const tenantSlug = getTenantFromHostname(hostname);
+  const tenantSlug = getSubdomainFromHostname(hostname);
   
   // Handle developer routes (no tenant context)
   if (path.startsWith('/developer')) {

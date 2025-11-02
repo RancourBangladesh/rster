@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import Logo from '@/components/Logo';
 import { User, Lock } from 'lucide-react';
+import { detectTenantFromWindow } from '@/lib/subdomain';
 import '../../../styles/auth-clean.css';
 
 export default function AdminLoginPage() {
@@ -15,24 +16,30 @@ export default function AdminLoginPage() {
 
   useEffect(()=>{
     // Check if accessed via subdomain to get tenant info
-    const hostname = window.location.hostname;
-    const parts = hostname.split('.');
+    const subdomain = detectTenantFromWindow();
     
-    if (parts.length >= 3 && parts[0] !== 'www') {
-      // Looks like a subdomain, fetch tenant info
-      const subdomain = parts[0];
+    if (subdomain) {
+      // Fetch tenant info for branding
       fetch('/api/tenant/info-by-slug', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({slug: subdomain})
-      }).then(res => res.json()).then(data => {
+      })
+      .then(res => {
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        return res.json();
+      })
+      .then(data => {
         if (data.success && data.tenant) {
           setTenantInfo({
             name: data.tenant.name,
             organizationName: data.tenant.organization_name || data.tenant.name
           });
         }
-      }).catch(err => {
+      })
+      .catch(err => {
         console.error('Failed to fetch tenant info:', err);
       });
     }
