@@ -8,13 +8,34 @@ interface Props {
   onSelect?: (date: string, shift: string) => void;
 }
 
-export default function MiniScheduleCalendar({ headers, schedule, selectedDate, onSelect }: Props) {
+export default function MiniScheduleCalendar({ 
+  headers, 
+  schedule, 
+  selectedDate, 
+  onSelect
+}: Props) {
   const [currentMonthOffset, setCurrentMonthOffset] = useState(0);
+
+  // Format date string to be more readable
+  const formatDate = (dateStr: string) => {
+    // Handle formats like "1November" -> "1 Nov"
+    const match = dateStr.match(/^(\d+)([A-Za-z]+)$/);
+    if (match) {
+      const day = match[1];
+      const month = match[2];
+      // Abbreviate month to first 3 letters
+      const monthAbbr = month.substring(0, 3);
+      return `${day} ${monthAbbr}`;
+    }
+    // If already formatted correctly, return as is
+    return dateStr;
+  };
 
   // Get days with shifts
   const getDaysWithShifts = () => {
     return headers.map((h, i) => ({
       date: h,
+      formattedDate: formatDate(h),
       shift: schedule[i] || '',
       fullDate: h
     }));
@@ -26,8 +47,8 @@ export default function MiniScheduleCalendar({ headers, schedule, selectedDate, 
     const groups: { [key: string]: typeof days } = {};
     
     days.forEach(day => {
-      // Extract month from date string (e.g., "7 Oct" -> "Oct")
-      const parts = day.date.split(' ');
+      // Extract month from formatted date string (e.g., "7 Oct" -> "Oct")
+      const parts = day.formattedDate.split(' ');
       const monthPart = parts.length > 1 ? parts[1] : parts[0].replace(/\d+/g, '');
       
       if (!groups[monthPart]) {
@@ -112,11 +133,11 @@ export default function MiniScheduleCalendar({ headers, schedule, selectedDate, 
           <button
             key={idx}
             className={`mini-schedule-day ${getShiftClassName(day.shift)} ${day.date === selectedDate ? 'selected' : ''}`}
-            title={`${day.date} - ${day.shift || 'N/A'}`}
+            title={`${day.formattedDate} - ${day.shift || 'N/A'}`}
             onClick={() => handleDateClick(day.date, day.shift)}
           >
             <div className="day-number">
-              {day.date.split(' ')[0]}
+              {day.formattedDate}
             </div>
             <div className="day-shift">
               {day.shift || '—'}

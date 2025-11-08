@@ -312,10 +312,9 @@
   border-radius: 16px;
   box-shadow: 0 20px 60px -20px rgba(0, 0, 0, 0.8), 0 10px 30px -10px rgba(0, 0, 0, 0.6);
   z-index: 1000;
-  overflow: hidden;
-  animation: dropdownSlide 0.2s ease-out;
-  max-height: 400px;
   overflow-y: auto;
+  animation: dropdownSlide 0.2s ease-out;
+  max-height: 240px;
   scrollbar-width: thin;
   scrollbar-color: var(--border) var(--bg);
 }
@@ -336,7 +335,7 @@
 }
 
 .employee-search-item-name {
-  color: #D6E6F4;
+  color: #000000;
   font-size: 0.85rem;
   font-weight: 600;
   margin-bottom: 4px;
@@ -349,13 +348,13 @@
 }
 
 .employee-search-item-id {
-  color: #8299B3;
+  color: #333333;
   font-family: monospace;
 }
 
 .employee-search-item-team {
-  color: #7E90A8;
-  background: var(--panel-alt);
+  color: #FFFFFF;
+  background: #4B5F7A;
   padding: 2px 8px;
   border-radius: 6px;
 }
@@ -670,7 +669,7 @@
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.8px;
-  color: #7E90A8;
+  color: #FFFFFF;
   font-weight: 600;
 }
 
@@ -693,7 +692,7 @@
 
 .shift-info-label {
   font-size: 0.75rem;
-  color: #7E90A8;
+  color: #FFFFFF;
   font-weight: 600;
 }
 

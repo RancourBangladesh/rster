@@ -54,7 +54,7 @@ export default function AdminLayoutShellNew({
   const [pendingRequests, setPendingRequests] = useState<number>(0);
   const prevPendingRef = useRef<number>(0);
 
-  const [panelTitle, setPanelTitle] = useState('RosterBhai');
+  const [panelTitle, setPanelTitle] = useState<string>('');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [tempTitle, setTempTitle] = useState('');
@@ -62,7 +62,7 @@ export default function AdminLayoutShellNew({
   // Determine active tab from pathname
   const activeTab = tabs.find(t => pathname === t.href) || tabs[0];
 
-  // Load organization name and logo from API
+  // Load organization name and logo from API FIRST on mount
   useEffect(() => {
     async function loadOrgData() {
       try {
@@ -80,6 +80,7 @@ export default function AdminLayoutShellNew({
         console.error('Failed to load organization data:', err);
       }
     }
+    // Call immediately, don't wait for anything
     loadOrgData();
   }, []);
 
@@ -299,8 +300,10 @@ export default function AdminLayoutShellNew({
                   />
                 ) : (
                   <>
-                    <span>{panelTitle}</span>
-                    {(userRole === 'super_admin' || userRole === 'admin') && (
+                    <span style={{opacity: panelTitle ? 1 : 0.3, minHeight: '1.3rem'}}>
+                      {panelTitle || '...'}
+                    </span>
+                    {(userRole === 'super_admin' || userRole === 'admin') && panelTitle && (
                       <button
                         onClick={() => {
                           setIsEditingTitle(true);

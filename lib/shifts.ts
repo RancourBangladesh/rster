@@ -102,7 +102,8 @@ export function updateShiftForTenant(tenantId: string, employeeId: string, dateI
       if (dateIndex >=0 && dateIndex < emp.schedule.length) {
         const old = emp.schedule[dateIndex];
         emp.schedule[dateIndex] = newShift;
-        if (newShift !== googleOriginal) {
+        // Always track modification if shift actually changed
+        if (newShift !== old) {
           const dateHeader = admin.headers[dateIndex] || `Date_${dateIndex}`;
           trackModifiedShiftForTenant(tenantId, employeeId, dateIndex, old, newShift, emp.name, teamName, dateHeader, modifiedBy);
         }

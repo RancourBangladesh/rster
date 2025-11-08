@@ -158,7 +158,7 @@ export function ShiftChangeModal(props:ShiftChangeProps) {
 
       <style jsx>{`
         .calendar-wrapper-block {
-          border:1px solid #2a3a4a;
+          border: none;
           padding:10px 12px 14px;
           border-radius:10px;
           background:#131c26;
@@ -528,7 +528,7 @@ export function SwapRequestModal(props:SwapRequestModalProps) {
 
       <style jsx>{`
         .calendar-wrapper-block {
-          border:1px solid #2a3a4a;
+          border: none;
           padding:10px 12px 14px;
           border-radius:10px;
           background:#131c26;
@@ -604,15 +604,15 @@ export function SwapRequestModal(props:SwapRequestModalProps) {
           top:100%;
           left:0;
           right:0;
-          background:#161f29;
-          border:1px solid #2a3947;
+          background:#FFFFFF;
+          border:1px solid #D0D0D0;
           border-radius:8px;
           margin-top:4px;
           max-height:250px;
           overflow-y:auto;
           z-index:50;
           padding:4px;
-          box-shadow:0 6px 18px -4px rgba(0,0,0,.55);
+          box-shadow:0 6px 18px -4px rgba(0,0,0,.15);
         }
         .swap-suggestion-item {
           width:100%;
@@ -626,15 +626,15 @@ export function SwapRequestModal(props:SwapRequestModalProps) {
           flex-direction:column;
           gap:2px;
           font-size:.68rem;
-          color:#d0dae4;
+          color:#000000;
           transition:.13s;
         }
         .swap-suggestion-item:hover,
         .swap-suggestion-item.highlight {
-          background:#233244;
+          background:#E8E8E8;
         }
         .ss-name { font-weight:600; font-size:.7rem; }
-        .ss-id { font-size:.58rem; color:#8aa0b4; letter-spacing:.4px; }
+        .ss-id { font-size:.58rem; color:#666666; letter-spacing:.4px; }
         .selected-member-line {
           display:flex;
           align-items:center;

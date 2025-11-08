@@ -11,9 +11,17 @@ export async function GET() {
   if (tenantId) {
     // Ensure tenant data is loaded
     loadAllForTenant(tenantId);
-    return NextResponse.json(getDisplayForTenant(tenantId));
+    return NextResponse.json(getDisplayForTenant(tenantId), {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+      }
+    });
   }
   
   // Legacy fallback
-  return NextResponse.json(getDisplay());
+  return NextResponse.json(getDisplay(), {
+    headers: {
+      'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+    }
+  });
 }

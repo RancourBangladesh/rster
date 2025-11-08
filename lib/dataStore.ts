@@ -8,6 +8,7 @@
 
 // Export all tenant-aware functions
 export {
+  clearTenantCacheForTenant,
   loadAllForTenant,
   reloadAllForTenant,
   saveGoogleForTenant,
@@ -46,6 +47,7 @@ export {
   updateShiftDefinitionForTenant,
   deleteShiftDefinitionForTenant,
   deleteEmployeeCredential,
+  reactivateEmployeeCredential,
   deactivateEmployee,
   employeeIdExists
 } from './dataStore.tenant';

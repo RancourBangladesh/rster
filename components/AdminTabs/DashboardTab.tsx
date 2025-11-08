@@ -40,8 +40,8 @@ export default function DashboardTab({ id }: Props) {
   const [activityPage, setActivityPage] = useState(0);
   const [activityPerPage, setActivityPerPage] = useState(5);
 
-  async function loadDashboard() {
-    setLoading(true);
+  async function loadDashboard(silent = false) {
+    if (!silent) setLoading(true);
     try {
       // Load requests data
       const requestsRes = await fetch('/api/schedule-requests/get-all').then(r => r.json());
@@ -63,15 +63,32 @@ export default function DashboardTab({ id }: Props) {
         // Get modified shifts count from already loaded data
         const modifiedShiftsCount = modifiedRes.recent_modifications?.length || 0;
 
+        // Calculate total possible shifts for the month
+        // totalEmployees * number of days in current headers = total shifts
+        let totalEmployees = 0;
+        let totalDaysInMonth = 0;
+        if (adminRes.teams) {
+          totalEmployees = Object.values(adminRes.teams).reduce((acc: number, team: any) => acc + team.length, 0);
+          totalDaysInMonth = adminRes.headers?.length || 0;
+        }
+        const totalPossibleShifts = totalEmployees * totalDaysInMonth;
+        
+        // Total shifts changed = approved shift requests + admin modified shifts
+        const approvedShiftRequests = combinedRequests.filter((r: any) => r.status === 'approved').length;
+        const totalShiftsChanged = approvedShiftRequests + modifiedShiftsCount;
+        
+        // Calculate acceptance rate as percentage of total shifts changed out of total possible shifts
+        const acceptance_rate = totalPossibleShifts > 0 
+          ? Math.round((totalShiftsChanged / totalPossibleShifts) * 100)
+          : 0;
+
         const swapStats = {
           total: combinedRequests.length,
-          accepted: combinedRequests.filter((r: any) => r.status === 'approved').length,
+          accepted: approvedShiftRequests,
           rejected: combinedRequests.filter((r: any) => r.status === 'rejected').length,
           pending: combinedRequests.filter((r: any) => r.status === 'pending').length,
           modified_shifts: modifiedShiftsCount,
-          acceptance_rate: combinedRequests.length > 0 
-            ? Math.round((combinedRequests.filter((r: any) => r.status === 'approved').length / combinedRequests.length) * 100)
-            : 0
+          acceptance_rate: acceptance_rate
         };
 
         // Calculate team stats with health metrics
@@ -112,8 +129,7 @@ export default function DashboardTab({ id }: Props) {
           });
         }
 
-        // Calculate total employees
-        const totalEmployees = Object.values(adminRes.teams).reduce((acc: number, team: any) => acc + team.length, 0);
+        // Calculate total employees (already calculated above for acceptance rate)
 
         // Calculate employees working today
         const today = new Date();
@@ -177,22 +193,37 @@ export default function DashboardTab({ id }: Props) {
           .sort((a, b) => (b.timestamp || b.created_at || '').localeCompare(a.timestamp || a.created_at || ''))
           .slice(0, 15);
 
-        setStats({
+        const newStats = {
           swap_requests: swapStats,
           team_stats: teamStats,
           recent_activity: recentActivity,
           total_employees: totalEmployees,
           working_today: workingToday
+        };
+        
+        // Only update state if data actually changed (prevents unnecessary re-renders and blinking)
+        setStats(prevStats => {
+          if (!prevStats) return newStats;
+          if (JSON.stringify(prevStats) !== JSON.stringify(newStats)) {
+            return newStats;
+          }
+          return prevStats;
         });
       }
     } catch (error) {
       console.error('Failed to load dashboard:', error);
     }
-    setLoading(false);
+    if (!silent) setLoading(false);
   }
 
   useEffect(() => { 
     loadDashboard(); 
+    // Auto-refresh dashboard every 5 seconds to catch shifts modified from Roster Data tab
+    // Use silent=true to prevent blinking - only updates if data actually changed
+    const interval = setInterval(() => {
+      loadDashboard(true);
+    }, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   if (loading) {
@@ -621,10 +652,6 @@ export default function DashboardTab({ id }: Props) {
             </div>
           )}
         </div>
-      </div>
-
-      <div className="actions-row" style={{ marginTop: 20 }}>
-        <button className="btn small" onClick={loadDashboard}>Refresh</button>
       </div>
 
       {/* Working Today Modal */}

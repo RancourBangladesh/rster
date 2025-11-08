@@ -1,32 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-import { getDisplay, getModifiedShifts } from '@/lib/dataStore';
 import { getDisplayForTenant, loadAllForTenant, getModifiedShiftsForTenant } from '@/lib/dataStore.tenant';
 import { formatDateHeader } from '@/lib/utils';
 import { SHIFT_MAP } from '@/lib/constants';
-import { findEmployeeTenant } from '@/lib/employeeAuth';
+import { getTenantFromRequest } from '@/lib/subdomain';
 
-export async function GET(_: NextRequest, { params }:{params:{employeeId:string}}) {
+export async function GET(request: NextRequest, { params }:{params:{employeeId:string}}) {
   const employeeId = params.employeeId;
   
-  // Find which tenant this employee belongs to
-  const tenantId = findEmployeeTenant(employeeId);
+  console.log('[MY-SCHEDULE] ============ ENDPOINT CALLED ============');
+  console.log('[MY-SCHEDULE] Employee ID:', employeeId);
   
-  let display;
-  if (tenantId) {
-    loadAllForTenant(tenantId);
-    display = getDisplayForTenant(tenantId);
-  } else {
-    display = getDisplay();
+  // Get tenant from subdomain
+  const tenant = getTenantFromRequest(request);
+  
+  console.log('[MY-SCHEDULE] Tenant:', tenant ? `${tenant.name} (${tenant.id})` : 'NOT FOUND');
+  
+  if (!tenant) {
+    console.error('[MY-SCHEDULE] No tenant found');
+    return NextResponse.json({ error: 'Invalid tenant subdomain' }, { status: 400 });
   }
+  
+  if (!tenant.is_active) {
+    console.error('[MY-SCHEDULE] Tenant is inactive');
+    return NextResponse.json({ error: 'Tenant is not active' }, { status: 403 });
+  }
+  
+  loadAllForTenant(tenant.id);
+  const display = getDisplayForTenant(tenant.id);
+  
+  console.log('[MY-SCHEDULE] Display data loaded:', {
+    teams: Object.keys(display.teams || {}).length,
+    headers: display.headers?.length || 0,
+    employees: display.allEmployees?.length || 0
+  });
   
   let employee: any = null;
   for (const [team,emps] of Object.entries(display.teams)) {
     const e = emps.find(emp=>emp.id===employeeId);
-    if (e) { employee = e; break; }
+    if (e) { employee = e; console.log('[MY-SCHEDULE] Found employee:', employeeId, 'in team:', team); break; }
   }
-  if (!employee) return NextResponse.json({error:'Employee not found'},{status:404});
+  
+  if (!employee) {
+    console.error('[MY-SCHEDULE] Employee not found:', employeeId);
+    return NextResponse.json({error:'Employee not found'},{status:404});
+  }
   const today = new Date();
   const tomorrow = new Date(Date.now()+86400000);
   const headers = display.headers;
@@ -42,6 +61,21 @@ export async function GET(_: NextRequest, { params }:{params:{employeeId:string}
     const shiftTime = SHIFT_MAP[code] || code || 'N/A';
     return { code: shiftCode, time: shiftTime };
   }
+  
+  // Helper to get weekday name from date header
+  function getWeekday(dateHeader: string | undefined): string {
+    if (!dateHeader) return '';
+    const match = dateHeader.match(/^(\d+)([A-Za-z]+)$/);
+    if (match) {
+      const day = parseInt(match[1]);
+      const month = match[2];
+      const monthNum = new Date(`${month} ${day}, 2025`).getMonth();
+      const date = new Date(2025, monthNum, day);
+      return date.toLocaleDateString('en-US', { weekday: 'long' });
+    }
+    return '';
+  }
+  
   const todayShift = getShift(todayLabel);
   const tomorrowShift = getShift(tomorrowLabel);
 
@@ -103,7 +137,7 @@ export async function GET(_: NextRequest, { params }:{params:{employeeId:string}
   }
 
   // shift changes from modified_shifts.json (current month only)
-  const modifiedShifts = tenantId ? getModifiedShiftsForTenant(tenantId) : getModifiedShifts();
+  const modifiedShifts = getModifiedShiftsForTenant(tenant.id);
   const changes:any[] = [];
   
   // Get current month-year in format YYYY-MM
@@ -120,6 +154,7 @@ export async function GET(_: NextRequest, { params }:{params:{employeeId:string}
     const curTime = SHIFT_MAP[mod.new_shift] || mod.new_shift || 'N/A';
     changes.push({
       date: mod.date_header,
+      weekday: getWeekday(mod.date_header),
       original_shift: origTime,
       current_shift: curTime,
       original_code: mod.old_shift,
@@ -130,8 +165,24 @@ export async function GET(_: NextRequest, { params }:{params:{employeeId:string}
   return NextResponse.json({
     success:true,
     employee: { name: employee.name, id: employee.id, team: employee.currentTeam||''},
-    today: {date: todayLabel, shift: todayShift.time, shift_code: todayShift.code},
-    tomorrow: {date: tomorrowLabel, shift: tomorrowShift.time, shift_code: tomorrowShift.code},
+    today: {
+      date: todayLabel, 
+      weekday: getWeekday(todayLabel),
+      shift: (() => {
+        const change = changes.find(c => c.date === todayLabel && c.current_shift);
+        return change ? change.current_shift : todayShift.time;
+      })(),
+      shift_code: todayShift.code
+    },
+    tomorrow: {
+      date: tomorrowLabel, 
+      weekday: getWeekday(tomorrowLabel),
+      shift: (() => {
+        const change = changes.find(c => c.date === tomorrowLabel && c.current_shift);
+        return change ? change.current_shift : tomorrowShift.time;
+      })(),
+      shift_code: tomorrowShift.code
+    },
     upcoming_work_days: upcoming.slice(0,5),
     planned_time_off: planned.slice(0,10),
     shift_changes: changes.slice(0,10),

@@ -166,31 +166,83 @@ export default function RosterSyncTab({id}: Props) {
   }
 
   async function hardReset() {
-    if (!confirm('⚠️ WARNING: This will permanently delete ALL schedule data including:\n\n• Admin modified roster data\n• Google Sheets imported data\n• Shift modification history\n• All schedule requests\n\nAre you sure?')) {
+    // First confirmation
+    const confirm1 = window.confirm(
+      '🔥 DANGER ZONE - PERMANENT DATA DELETION\n\n' +
+      '⚠️ This will PERMANENTLY DELETE:\n' +
+      '✗ ALL employees and roster data\n' +
+      '✗ ALL schedule data (original & modified)\n' +
+      '✗ ALL shift modifications\n' +
+      '✗ ALL shift change/swap requests\n' +
+      '✗ ALL notifications and history\n' +
+      '✗ Google Sheets sync links\n' +
+      '✗ All settings and templates\n\n' +
+      'This action CANNOT BE UNDONE.\n\n' +
+      'Click OK to proceed to final confirmation.'
+    );
+    
+    if (!confirm1) {
       return;
     }
-    if (!confirm('This action cannot be undone. Are you absolutely sure you want to proceed?')) {
+    
+    // Second confirmation with warning text
+    const confirm2 = window.confirm(
+      '⚠️ FINAL WARNING ⚠️\n\n' +
+      'Are you ABSOLUTELY CERTAIN you want to permanently delete ALL data?\n\n' +
+      'You will need to:\n' +
+      '1. Re-import employees from Google Sheets or CSV\n' +
+      '2. Recreate all shift assignments\n' +
+      '3. Reconfigure all settings\n\n' +
+      'Type: I understand the consequences\n\n' +
+      'Click OK only if you are 100% sure.'
+    );
+    
+    if (!confirm2) {
       return;
     }
 
     setHardResetting(true);
+    setSyncMessage({text: 'Hard resetting all data... Please wait...', type: 'success'});
+    
     try {
-      const res = await fetch('/api/admin/hard-reset', {method: 'POST'}).then(r => r.json());
-      if (res.success) {
-        alert(res.message);
-        setSyncMessage({text: 'Data has been reset. Refreshing...', type: 'success'});
-        // Force a hard refresh after deletion
+      console.log('[Hard Reset] Sending hard-reset request...');
+      const res = await fetch('/api/admin/hard-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      const result = await res.json();
+      console.log('[Hard Reset] Response:', result);
+      
+      if (result.success) {
+        setSyncMessage({
+          text: '✓ Hard reset successful! All data deleted. Reloading admin panel in 3 seconds...', 
+          type: 'success'
+        });
+        
+        // Wait 3 seconds then do a hard refresh of the entire page
         setTimeout(() => {
+          console.log('[Hard Reset] Doing hard refresh of page...');
+          // Hard reload to bypass cache
           window.location.reload();
-        }, 1000);
+        }, 3000);
       } else {
-        alert(res.error || 'Reset failed');
+        setSyncMessage({
+          text: `✗ Reset failed: ${result.error || 'Unknown error'}`, 
+          type: 'error'
+        });
+        console.error('[Hard Reset] Error:', result.error);
         setHardResetting(false);
+        alert(`Hard Reset Failed:\n\n${result.error || 'Unknown error occurred'}`);
       }
-    } catch (e) {
-      alert('Reset failed');
-      console.error(e);
+    } catch (error: any) {
+      console.error('[Hard Reset] Exception:', error);
+      setSyncMessage({
+        text: `✗ Reset failed: ${error.message || 'Network error'}`, 
+        type: 'error'
+      });
       setHardResetting(false);
+      alert(`Hard Reset Failed:\n\n${error.message || 'Network error occurred'}`);
     }
   }
 
@@ -318,14 +370,24 @@ export default function RosterSyncTab({id}: Props) {
     return () => clearInterval(interval);
   }, [autoSyncEnabled, syncSheets]);
 
-  // Auto-refresh links every 5 seconds
+  // Auto-refresh links every 5 seconds (silently, without showing loading state)
   useEffect(() => {
-    const interval = setInterval(() => {
-      loadLinks();
+    let lastLinks = JSON.stringify(links);
+    const interval = setInterval(async () => {
+      const res = await fetch('/api/admin/get-google-links');
+      if (res.ok) {
+        const newLinks = await res.json();
+        const newLinksStr = JSON.stringify(newLinks);
+        // Only update state if links actually changed (prevents UI flicker)
+        if (newLinksStr !== lastLinks) {
+          setLinks(newLinks);
+          lastLinks = newLinksStr;
+        }
+      }
     }, 5000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [links]);
 
   return (
     <div id={id} className="tab-pane">
@@ -579,7 +641,6 @@ export default function RosterSyncTab({id}: Props) {
           <button className="btn primary" onClick={saveLink}><Save size={16} style={{display:'inline', marginRight:'6px'}} /> Save Link</button>
           <button className="btn" onClick={loadLinks}>Refresh</button>
         </div>
-        {linksLoading && <div className="inline-loading">Loading links...</div>}
         <table className="data-table small">
           <thead>
             <tr>
@@ -604,52 +665,84 @@ export default function RosterSyncTab({id}: Props) {
         </div>
       </div>
 
-      {/* Reset Operations Section */}
-      <div style={{marginBottom: '40px'}}>
-        <h3 style={{fontSize: '1.3rem', marginBottom: '15px', color: 'var(--primary)', display:'flex', alignItems:'center', gap:8}}>
-          <RotateCcw size={20} />
-          Reset Operations
+      {/* Hard Reset Danger Zone Section - At Bottom */}
+      <div style={{
+        marginTop: '40px',
+        marginBottom: '40px',
+        padding: '20px',
+        backgroundColor: '#FEE2E2',
+        border: '3px solid #DC2626',
+        borderRadius: '10px',
+        position: 'relative'
+      }}>
+        <div style={{
+          position: 'absolute',
+          top: '12px',
+          left: '16px',
+          fontSize: '24px'
+        }}>
+          🔥
+        </div>
+        <h3 style={{
+          marginTop: 0,
+          marginLeft: '40px',
+          color: '#991B1B',
+          fontSize: '1.3rem',
+          fontWeight: 'bold'
+        }}>
+          DANGER ZONE - Hard Reset All Data
         </h3>
         
-        {/* Reset to Google/CSV */}
-        <div style={{marginBottom: '25px'}}>
-          <h4 style={{fontSize: '1.1rem', marginBottom: '10px'}}>Reset to Google/CSV Data</h4>
-          <p style={{marginBottom: '12px', color: 'var(--text-dim)'}}>
-            Reset admin roster data to match the original Google Sheets or CSV data. This will remove all manual shift modifications.
+        <div style={{
+          backgroundColor: '#FEF2F2',
+          padding: '16px',
+          borderRadius: '8px',
+          marginBottom: '16px',
+          color: '#7F1D1D',
+          lineHeight: '1.6'
+        }}>
+          <p style={{marginTop: 0, marginBottom: '12px', fontWeight: 600}}>
+            ⚠️ WARNING: This action is IRREVERSIBLE and will permanently delete:
           </p>
-          <button
-            className="btn"
-            style={{backgroundColor: '#ff9800', color: 'white'}}
-            onClick={resetToGoogleOrCSV}
-            disabled={loading || syncing || resetting}
-          >
-            {resetting ? 'Resetting…' : <><RotateCcw size={16} style={{display:'inline', marginRight:6}} />Reset to Google/CSV</>}
-          </button>
-        </div>
-
-        {/* Hard Reset */}
-        <div>
-          <h4 style={{fontSize: '1.1rem', marginBottom: '10px', color: '#ff6b6b'}}>⚠️ Hard Reset (Danger Zone)</h4>
-          <p style={{marginBottom: '12px', color: '#ff6b6b'}}>
-            This will permanently delete ALL schedule data including:
-          </p>
-          <ul style={{marginBottom: '12px', marginLeft: '20px', color: 'var(--text-dim)'}}>
-            <li>Admin modified roster data</li>
-            <li>Google Sheets imported data</li>
-            <li>Shift modification history</li>
-            <li>All schedule requests</li>
+          <ul style={{marginTop: '8px', marginBottom: '8px', paddingLeft: '20px'}}>
+            <li>All employee records and roster data</li>
+            <li>All schedule data (original and modified)</li>
+            <li>All shift modifications and approvals</li>
+            <li>All shift requests and change history</li>
+            <li>All Google Sheets sync links</li>
+            <li>All notifications and activity logs</li>
+            <li>All roster templates</li>
+            <li>All admin settings</li>
           </ul>
-          <div className="import-box" style={{borderColor: '#ff6b6b', marginTop: '10px'}}>
-            <button
-              className="btn"
-              style={{backgroundColor: '#ff6b6b', color: 'white'}}
-              disabled={hardResetting}
-              onClick={hardReset}
-            >
-              {hardResetting ? 'Resetting...' : '🗑️ Hard Reset All Data'}
-            </button>
-          </div>
+          <p style={{marginTop: '12px', marginBottom: 0, fontSize: '0.95rem'}}>
+            After hard reset, you will need to re-import all data from scratch.
+          </p>
         </div>
+        
+        <button
+          onClick={hardReset}
+          disabled={hardResetting}
+          className="btn"
+          style={{
+            width: '100%',
+            padding: '14px 20px',
+            backgroundColor: '#DC2626',
+            color: 'white',
+            fontWeight: 'bold',
+            fontSize: '1rem',
+            border: '2px solid #991B1B',
+            borderRadius: '8px',
+            cursor: hardResetting ? 'not-allowed' : 'pointer',
+            opacity: hardResetting ? 0.7 : 1,
+            transition: 'all 0.2s ease',
+            textAlign: 'center'
+          }}
+          onMouseEnter={(e) => !hardResetting && (e.currentTarget.style.backgroundColor = '#991B1B')}
+          onMouseLeave={(e) => !hardResetting && (e.currentTarget.style.backgroundColor = '#DC2626')}
+          title="Permanently delete all data and reset system to brand new state"
+        >
+          {hardResetting ? '⏳ Hard Resetting All Data... Please Wait...' : '🗑️ HARD RESET ALL DATA - PERMANENT DELETE'}
+        </button>
       </div>
 
       {/* Roster Template Modal */}

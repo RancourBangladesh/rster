@@ -86,11 +86,17 @@ export default function ShiftView({ open, onClose, roster, headers }: Props) {
     const dateIndex = headers.indexOf(selectedDate);
     if (dateIndex === -1) return [];
     const out:any[] = [];
+    const seenIds = new Set<string>(); // Track unique employee IDs to avoid duplicates
     Object.entries(roster.teams).forEach(([teamName, emps]:[string, any])=>{
       if (selectedTeams.length && !selectedTeams.includes(teamName)) return;
       (emps as any[]).forEach(emp=>{
+        // Skip if we've already processed this employee
+        if (seenIds.has(emp.id)) return;
+        
         const rawShift = emp.schedule[dateIndex] || '';
         if (!codeMatchesFilters(rawShift)) return;
+        
+        seenIds.add(emp.id); // Mark this employee as processed
         out.push({
           name: emp.name,
           id: emp.id,
@@ -264,7 +270,7 @@ export default function ShiftView({ open, onClose, roster, headers }: Props) {
         </div>
       </div>
 
-      {/* Original styles from Version8 left untouched below */}
+      {/* Modern light theme to match employee portal */}
       <style jsx global>{`
         .modal-overlay.sv-fullwidth {
           position:fixed;
@@ -272,20 +278,20 @@ export default function ShiftView({ open, onClose, roster, headers }: Props) {
           display:flex;
           align-items:center;
           justify-content:center;
-          background:rgba(0,0,0,.55);
-          backdrop-filter:blur(5px);
+          background:rgba(0,0,0,.6);
+          backdrop-filter:blur(4px);
           z-index:3000;
           padding:10px;
         }
         .sv-dialog-wide {
           width:clamp(1200px,92vw,1720px);
           max-height:94vh;
-          background:#0e141c;
-          border:1px solid #2d3b47;
-          border-radius:18px;
+          background:#fff;
+          border:1px solid #e5e7eb;
+          border-radius:12px;
           display:flex;
           flex-direction:column;
-          box-shadow:0 16px 42px -10px rgba(0,0,0,.65);
+          box-shadow:0 20px 50px rgba(0,0,0,0.3);
           overflow:hidden;
           font-size:16px;
         }
@@ -293,32 +299,38 @@ export default function ShiftView({ open, onClose, roster, headers }: Props) {
           display:flex;
           justify-content:space-between;
           align-items:center;
-          padding:16px 28px 14px;
-          border-bottom:1px solid #1c2731;
+          padding:20px 28px;
+          border-bottom:1px solid #e5e7eb;
+          background:#fff;
         }
         .sv-header-wide h3 {
           margin:0;
-          font-size:1.05rem;
-          letter-spacing:1.1px;
-          font-weight:600;
-          color:#e1e9ef;
+          font-size:1.25rem;
+          letter-spacing:0.5px;
+          font-weight:700;
+          color:#111827;
         }
         .sv-close {
-          background:#223346;
-          border:1px solid #314a62;
-          color:#dde7ef;
-          padding:6px 12px;
-          font-size:.8rem;
+          background:#f3f4f6;
+          border:1px solid #d1d5db;
+          color:#374151;
+          padding:8px 14px;
+          font-size:.85rem;
           border-radius:8px;
           cursor:pointer;
+          transition:all 0.2s;
         }
-        .sv-close:hover { background:#2f4c67; }
+        .sv-close:hover { 
+          background:#e5e7eb;
+          border-color:#9ca3af;
+        }
 
         .sv-body-wide {
           display:flex;
           gap:40px;
           padding:28px 32px 14px;
           overflow-y:auto;
+          background:#f9fafb;
         }
         .sv-calendar-col-wide {
           flex:0 0 300px;
@@ -328,9 +340,10 @@ export default function ShiftView({ open, onClose, roster, headers }: Props) {
         }
         .sv-section-label-wide {
           font-size:.8rem;
-          letter-spacing:1px;
-          color:#a9bdd0;
+          letter-spacing:0.5px;
+          color:#6b7280;
           font-weight:600;
+          text-transform:uppercase;
         }
         .sv-content-col-wide {
           flex:1;
@@ -339,120 +352,162 @@ export default function ShiftView({ open, onClose, roster, headers }: Props) {
           flex-direction:column;
         }
 
-        .sv-filter-block-wide { margin-bottom:20px; }
+        .sv-filter-block-wide { 
+          margin-bottom:20px;
+          background:#fff;
+          padding:16px;
+          border-radius:8px;
+          border:1px solid #e5e7eb;
+        }
         .sv-filter-title-wide {
-          font-size:.72rem;
-          letter-spacing:1px;
-          color:#8ea3b6;
-          margin-bottom:10px;
+          font-size:.75rem;
+          letter-spacing:0.5px;
+          color:#6b7280;
+          margin-bottom:12px;
           font-weight:700;
+          text-transform:uppercase;
         }
         .sv-chip-row-wide { display:flex; flex-wrap:wrap; gap:10px; }
         .sv-chip-wide {
           padding:8px 16px;
-          font-size:.75rem;
-          border-radius:24px;
-          background:#1d2935;
-          border:1px solid #324556;
-          color:#d5dee6;
+          font-size:.875rem;
+          border-radius:8px;
+          background:#f3f4f6;
+          border:1px solid #d1d5db;
+          color:#374151;
           cursor:pointer;
-          transition:.18s;
+          transition:.2s;
           font-weight:500;
         }
+        .sv-chip-wide:hover {
+          background:#e5e7eb;
+          border-color:#9ca3af;
+        }
         .sv-chip-wide.active {
-          background:#3a6599;
-          border-color:#5e94d1;
+          background:#3b82f6;
+          border-color:#2563eb;
           color:#fff;
-          box-shadow:0 0 0 2px rgba(94,148,209,.28);
+          box-shadow:0 0 0 3px rgba(59,130,246,0.2);
         }
         .sv-chip-wide.clear {
           background:transparent;
-          border:1px dashed #334758;
-          color:#94abbe;
+          border:1px dashed #d1d5db;
+          color:#6b7280;
         }
-        .sv-chip-wide.clear:hover { border-color:#5d90c8; color:#d6e6f5; }
+        .sv-chip-wide.clear:hover { 
+          border-color:#3b82f6; 
+          color:#3b82f6; 
+        }
 
-        .sv-results-wide { margin-top:4px; }
+        .sv-results-wide { 
+          margin-top:4px;
+        }
         .sv-subtitle-wide {
-          margin:0 0 14px 0;
-          font-size:1rem;
-          letter-spacing:.6px;
-          color:#b9cddd;
+          margin:0 0 16px 0;
+          font-size:1.125rem;
+          letter-spacing:0;
+          color:#111827;
           font-weight:600;
         }
         .sv-empty-wide {
-          background:#17232d;
-          border:1px solid #223444;
-          padding:18px;
-          border-radius:12px;
-          font-size:.8rem;
-          color:#8fa5b9;
+          background:#fff;
+          border:1px solid #e5e7eb;
+          padding:40px;
+          border-radius:8px;
+          font-size:.875rem;
+          color:#6b7280;
+          text-align:center;
         }
         .sv-employee-grid-wide {
           display:grid;
-          gap:18px 20px;
-          grid-template-columns:repeat(auto-fill,minmax(250px,1fr));
+          gap:16px;
+          grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
         }
         .sv-emp-card-wide {
-          background:#18242e;
-          border:1px solid #2d3d4c;
-          border-radius:14px;
-          padding:14px 16px 16px;
+          background:#fff;
+          border:1px solid #e5e7eb;
+          border-radius:12px;
+          padding:16px;
           display:flex;
           flex-direction:column;
           gap:8px;
-          transition:.18s;
+          transition:.2s;
+          box-shadow:0 1px 3px rgba(0,0,0,0.05);
         }
         .sv-emp-card-wide:hover {
-          background:#20323f;
-          border-color:#416077;
+          box-shadow:0 4px 12px rgba(0,0,0,0.1);
+          border-color:#d1d5db;
+          transform:translateY(-2px);
         }
-        .sv-emp-name-wide { font-size:.95rem; font-weight:600; color:#e2ebf2; }
-        .sv-emp-meta-wide { font-size:.7rem; color:#8ba0b2; letter-spacing:.3px; }
+        .sv-emp-name-wide { 
+          font-size:1rem; 
+          font-weight:600; 
+          color:#111827; 
+        }
+        .sv-emp-meta-wide { 
+          font-size:.75rem; 
+          color:#6b7280; 
+          letter-spacing:0; 
+        }
         .sv-emp-shift-wide {
           align-self:flex-start;
-          background:#3a6599;
-          padding:5px 12px;
-          font-size:.7rem;
-          border-radius:18px;
-          letter-spacing:.6px;
+          background:#3b82f6;
+          padding:6px 14px;
+          font-size:.75rem;
+          border-radius:6px;
+          letter-spacing:0.3px;
           font-weight:600;
           color:#fff;
         }
 
-        .sv-stats-wide { margin-top:26px; }
-        .sv-stats-row-wide { display:flex; flex-wrap:wrap; gap:12px; }
+        .sv-stats-wide { 
+          margin-top:26px;
+          background:#fff;
+          padding:20px;
+          border-radius:8px;
+          border:1px solid #e5e7eb;
+        }
+        .sv-stats-row-wide { 
+          display:flex; 
+          flex-wrap:wrap; 
+          gap:12px;
+          margin-top:12px;
+        }
         .sv-stat-pill-wide {
-          background:#1f2c38;
-          border:1px solid #314354;
-          border-radius:12px;
-          padding:10px 14px;
+          background:#f9fafb;
+          border:1px solid #e5e7eb;
+          border-radius:8px;
+          padding:12px 16px;
           display:flex;
           align-items:center;
           gap:12px;
-          font-size:.75rem;
+          font-size:.875rem;
         }
         .sv-stat-pill-wide.total {
-          background:#253848;
-          border:1px dashed #3c5668;
+          background:#f3f4f6;
+          border:2px solid #d1d5db;
         }
         .sv-stat-key-wide {
-          background:#3b6ea7;
-          padding:4px 10px;
-          border-radius:14px;
-          font-size:.65rem;
-          letter-spacing:.5px;
+          background:#3b82f6;
+          padding:4px 12px;
+          border-radius:6px;
+          font-size:.75rem;
+          letter-spacing:0.3px;
           color:#fff;
           font-weight:600;
         }
-        .sv-stat-val-wide { font-weight:700; font-size:.85rem; color:#e7eef5; }
+        .sv-stat-val-wide { 
+          font-weight:700; 
+          font-size:1rem; 
+          color:#111827; 
+        }
 
         .sv-footer-wide {
-          padding:16px 32px 24px;
-          border-top:1px solid #1c2731;
+          padding:16px 32px 20px;
+          border-top:1px solid #e5e7eb;
           display:flex;
           justify-content:flex-end;
-          background:linear-gradient(to top,#101a24,#101a24e0);
+          background:#fff;
         }
 
         @media (min-width: 1500px) {
@@ -467,6 +522,25 @@ export default function ShiftView({ open, onClose, roster, headers }: Props) {
         @media (max-width: 1000px) {
           .sv-body-wide { flex-direction:column; }
           .sv-calendar-col-wide { flex:0 0 auto; }
+        }
+        @media (max-width: 768px) {
+          .sv-dialog-wide { 
+            width:96vw;
+            max-height:96vh;
+          }
+          .sv-header-wide {
+            padding:16px 20px;
+          }
+          .sv-body-wide {
+            padding:20px;
+            gap:20px;
+          }
+          .sv-filter-block-wide {
+            padding:12px;
+          }
+          .sv-employee-grid-wide {
+            grid-template-columns:1fr;
+          }
         }
       `}</style>
     </div>

@@ -99,6 +99,10 @@ function mergeDisplay(tenantId: string) {
   const cache = getTenantCache(tenantId);
   const { googleData, adminData, modifiedShifts } = cache;
   
+  console.log('[MERGE-DISPLAY] Starting merge for tenant:', tenantId);
+  console.log('[MERGE-DISPLAY] Google data:', Object.keys(googleData.teams || {}).length, 'teams');
+  console.log('[MERGE-DISPLAY] Admin data:', Object.keys(adminData.teams || {}).length, 'teams');
+  
   const merged: RosterData = deepCopy(googleData);
   
   // Apply admin modifications
@@ -123,10 +127,19 @@ function mergeDisplay(tenantId: string) {
     merged.allEmployees.push(...emps);
   });
   
+  console.log('[MERGE-DISPLAY] Merged result:', Object.keys(merged.teams).length, 'teams,', merged.allEmployees.length, 'employees');
+  
   cache.displayData = merged;
 }
 
 // ===== LOAD/RELOAD FUNCTIONS =====
+
+/**
+ * Clear tenant cache completely (used for hard reset)
+ */
+export function clearTenantCacheForTenant(tenantId: string) {
+  tenantCaches.delete(tenantId);
+}
 
 export function loadAllForTenant(tenantId: string) {
   ensureTenantDataDir(tenantId);
@@ -377,12 +390,17 @@ export function updateRequestStatusForTenant(
   tenantId: string,
   id: string,
   status: 'approved'|'rejected',
-  user: string
+  user: string,
+  adminMessage?: string
 ) {
   const file = getScheduleRequestsForTenant(tenantId);
   const sc = file.shift_change_requests.find(r=>r.id===id);
   if (sc) {
     sc.status = status;
+    sc.updated_at = new Date().toISOString();
+    if (adminMessage) {
+      sc.admin_message = adminMessage;
+    }
     if (status==='approved') {
       sc.approved_at = new Date().toISOString();
       sc.approved_by = user;
@@ -395,6 +413,10 @@ export function updateRequestStatusForTenant(
   const sw = file.swap_requests.find(r=>r.id===id);
   if (sw) {
     sw.status = status;
+    sw.updated_at = new Date().toISOString();
+    if (adminMessage) {
+      sw.admin_message = adminMessage;
+    }
     if (status==='approved') {
       sw.approved_at = new Date().toISOString();
       sw.approved_by = user;
@@ -576,6 +598,25 @@ export function deleteEmployeeCredential(tenantId: string, employeeId: string) {
     writeJSON(credFile, credentials);
   } catch (error) {
     console.error('Failed to delete employee credential:', error);
+  }
+}
+
+/**
+ * Reactivate an employee's login credentials
+ * Clears deleted_at and marks credential as active
+ */
+export function reactivateEmployeeCredential(tenantId: string, employeeId: string) {
+  const credFile = getTenantEmployeeCredentialsFile(tenantId);
+  try {
+    const credentials: { credentials: any[] } = readJSON(credFile, { credentials: [] });
+    const cred = credentials.credentials.find((c: any) => c.employee_id === employeeId);
+    if (cred) {
+      cred.status = 'active';
+      if (cred.deleted_at) delete cred.deleted_at;
+    }
+    writeJSON(credFile, credentials);
+  } catch (error) {
+    console.error('Failed to reactivate employee credential:', error);
   }
 }
 

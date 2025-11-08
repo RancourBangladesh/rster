@@ -5,8 +5,10 @@ import StatCard from './Shared/StatCard';
 import EmployeeSearch from './Shared/EmployeeSearch';
 import MonthCompactCalendar from './Shared/MonthCompactCalendar';
 import ShiftView from './ShiftView';
-import EmployeeProfileModal from './EmployeeProfileModal';
-import { LogOut, RefreshCw, Calendar as CalendarIcon, Edit3, ArrowLeftRight, Eye, Search as SearchIcon, CalendarDays, Umbrella, CheckCircle2, Settings, ArrowLeft } from 'lucide-react';
+import NotificationPanel from './Shared/NotificationPanel';
+import NotificationToast from './Shared/NotificationToast';
+import ProfileManagement from './ProfileManagement';
+import { LogOut, RefreshCw, Calendar as CalendarIcon, Edit3, ArrowLeftRight, Eye, Search as SearchIcon, CalendarDays, Umbrella, CheckCircle2, Settings } from 'lucide-react';
 import { SHIFT_MAP } from '@/lib/constants';
 
 /**
@@ -19,8 +21,8 @@ import { SHIFT_MAP } from '@/lib/constants';
 
 interface ScheduleData {
   employee: { name:string; id:string; team:string };
-  today: { date:string; shift:string };
-  tomorrow: { date:string; shift:string };
+  today: { date:string; weekday?:string; shift:string; shift_code?:string };
+  tomorrow: { date:string; weekday?:string; shift:string; shift_code?:string };
   upcoming_work_days: any[];
   planned_time_off: any[];
   shift_changes: any[];
@@ -58,6 +60,7 @@ interface Props {
 type ViewMode = 'self' | 'other';
 
 export default function ClientDashboard({employeeId, fullName, onLogout}:Props) {
+  console.log('[ClientDashboard] Component mounted with employeeId:', employeeId);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState('');
   const [baseData,setBaseData]=useState<ScheduleData|null>(null);
@@ -65,13 +68,14 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
   const [requests,setRequests]=useState<RequestHistory[]>([]);
   const [selectedDate,setSelectedDate]=useState<string>('');
   const [selectedShift,setSelectedShift]=useState<string>('');
+  const [userSelectedDate,setUserSelectedDate]=useState<string>('');
   const [showChange,setShowChange]=useState(false);
   const [showSwap,setShowSwap]=useState(false);
   const [showShiftView,setShowShiftView]=useState(false);
-  const [showProfile,setShowProfile]=useState(false);
   const [headers,setHeaders]=useState<string[]>([]);
   const [mySchedule,setMySchedule]=useState<string[]>([]);
   const [refreshing,setRefreshing]=useState(false);
+  const [showSelectedDateSection,setShowSelectedDateSection]=useState(false);
 
   const [mode,setMode]=useState<ViewMode>('self');
   const [otherData,setOtherData]=useState<ScheduleData|null>(null);
@@ -79,19 +83,49 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
   const [approvedRequests,setApprovedRequests]=useState<RequestHistory[]>([]);
   const [showCalendar,setShowCalendar]=useState(false);
   const [rerenderKey,setRerenderKey]=useState(0);
+  const [todayDateHeader,setTodayDateHeader]=useState<string>('');
   const lastActionRef = useRef<string>('');
+  const selectedDateTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const calendarInactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // NEW: team members (same team, excluding current user) for swap modal
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [tenantInfo, setTenantInfo] = useState<{name: string; organization_name: string; logo_url?: string} | null>(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileData, setProfileData] = useState<{email: string; phone: string; address: string; photo: string} | null>(null);
+  const [notification, setNotification] = useState<{id: string; message: string; type: 'success' | 'error' | 'info'} | null>(null);
+
+  async function loadProfileData() {
+    try {
+      const savedUser = localStorage.getItem('rosterViewerUser');
+      if (!savedUser) return;
+      const user = JSON.parse(savedUser);
+      
+      const res = await fetch(`/api/my-profile/get?employeeId=${encodeURIComponent(user.employeeId)}&t=${Date.now()}`, { 
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+      });
+      const data = await res.json();
+      if (data.success && data.profile) {
+        setProfileData(data.profile);
+      }
+    } catch(e) {
+      console.error('[LoadProfile] error', e);
+    }
+  }
+
+  function handleProfileUpdated() {
+    loadProfileData();
+    setNotification({
+      id: Date.now().toString(),
+      message: '✓ Profile Updated Successfully',
+      type: 'success'
+    });
+  }
 
   async function loadTenantInfo() {
     try {
-      const res = await fetch('/api/my-schedule/tenant-info', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({employeeId})
-      });
+      const res = await fetch('/api/my-schedule/tenant-info');
       const data = await res.json();
       if (data.success && data.tenant) {
         setTenantInfo(data.tenant);
@@ -105,28 +139,40 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
     console.debug('[Load] Base schedule for', employeeId);
     setLoading(true); setError('');
     try {
-  const res = await fetch(`/api/my-schedule/${employeeId}`, { cache: 'no-store' });
+      // TEMP: Log that we're about to fetch
+      console.log('[ClientDash] About to fetch /api/my-schedule/' + employeeId);
+      const res = await fetch(`/api/my-schedule/${employeeId}`, { cache: 'no-store' });
+      console.log('[ClientDash] Fetch response received, status:', res.status);
       const j = await res.json();
+      console.log('[ClientDash] API Response Status:', res.ok, 'Success field:', j.success);
+      console.log('[ClientDash] Response object:', j);
       if (!res.ok || !j.success) {
-        setError(j.error||'Error loading schedule'); 
+        const errorMsg = j.error||'Error loading schedule';
+        console.error('[ClientDash] API Error:', errorMsg);
+        setError(errorMsg); 
         setLoading(false); 
         return;
       }
+      console.log('[ClientDash] Setting baseData with:', {
+        employee: j.employee,
+        today: j.today,
+        tomorrow: j.tomorrow,
+        upcoming_count: j.upcoming_work_days?.length,
+        timeoff_count: j.planned_time_off?.length,
+        changes_count: j.shift_changes?.length
+      });
       setBaseData(j);
     } catch(e:any) {
+      console.error('[ClientDash] Fetch error:', e);
       setError(e.message);
     }
     setLoading(false);
   }
 
   async function loadRoster() {
+    console.log('[ClientDash] loadRoster() called');
     try {
-      const res = await fetch('/api/employee/get-roster-data', { 
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({employeeId}),
-        cache: 'no-store' 
-      }).then(r=>r.json());
+      const res = await fetch('/api/my-schedule/roster-display', { cache: 'no-store' }).then(r=>r.json());
       setRoster(res);
       setHeaders(res.headers||[]);
       const teamEntry = Object.entries(res.teams||{}).find(([,list]:any)=> list.some((e:any)=> e.id===employeeId));
@@ -177,22 +223,82 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
     console.debug('[RefreshAll] start');
     setRefreshing(true);
     await loadTenantInfo();
+    await loadProfileData();
     await Promise.all([loadBaseSchedule(), loadRoster(), loadRequests()]);
     setRefreshing(false);
     console.debug('[RefreshAll] done');
   }
 
-  useEffect(()=>{ refreshAll(); },[employeeId]);
+  useEffect(()=>{ 
+    console.log('[ClientDashboard] useEffect triggered for employeeId:', employeeId);
+    refreshAll(); 
+  },[employeeId]);
 
   function onCalendarSelect(date:string, shift:string) {
+    setUserSelectedDate(date);
     setSelectedDate(date);
     setSelectedShift(shift);
+    setShowSelectedDateSection(true);
+    
+    // Clear any existing timer
+    if (selectedDateTimerRef.current) {
+      clearTimeout(selectedDateTimerRef.current);
+    }
+    
+    // Set auto-hide timer (18 seconds)
+    selectedDateTimerRef.current = setTimeout(() => {
+      setShowSelectedDateSection(false);
+      setUserSelectedDate('');
+      setSelectedDate('');
+      setSelectedShift('');
+    }, 18000);
+  }
+
+  function closeSelectedDateSection() {
+    if (selectedDateTimerRef.current) {
+      clearTimeout(selectedDateTimerRef.current);
+    }
+    setShowSelectedDateSection(false);
+    setSelectedDate('');
+    setSelectedShift('');
+  }
+
+  function resetCalendarInactivityTimer() {
+    // Clear existing timer
+    if (calendarInactivityTimerRef.current) {
+      clearTimeout(calendarInactivityTimerRef.current);
+    }
+    
+    // Set new 5 second timer
+    calendarInactivityTimerRef.current = setTimeout(() => {
+      setShowCalendar(false);
+    }, 5000);
   }
 
   function myShiftForDate(date:string) {
     const idx = headers.indexOf(date);
     if (idx === -1) return '';
     return mySchedule[idx] || '';
+  }
+
+  function getShiftForDate(date:string) {
+    const idx = headers.indexOf(date);
+    if (idx === -1) return '';
+    // Use active schedule (otherSchedule if viewing other employee, mySchedule otherwise)
+    return activeScheduleArray[idx] || '';
+  }
+
+  function getWeekdayFromDateHeader(dateHeader: string | undefined): string {
+    if (!dateHeader) return '';
+    const match = dateHeader.match(/^(\d+)([A-Za-z]+)$/);
+    if (match) {
+      const day = parseInt(match[1]);
+      const month = match[2];
+      const monthNum = new Date(`${month} ${day}, 2025`).getMonth();
+      const date = new Date(2025, monthNum, day);
+      return date.toLocaleDateString('en-US', { weekday: 'long' });
+    }
+    return '';
   }
 
   const handleEmployeeSearch = async (employee: any) => {
@@ -249,11 +355,67 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
     }
   },[mode, otherData]);
 
+  // Set today's date header for calendar highlighting
+  useEffect(() => {
+    if (headers && headers.length > 0) {
+      const today = new Date();
+      const day = today.getDate();
+      const month = today.toLocaleString('en-US', { month: 'short' });
+      const todayLabel = `${day}${month}`;
+      const found = headers.find(h => h === todayLabel || h.includes(todayLabel));
+      if (found) {
+        setTodayDateHeader(found);
+      }
+    }
+  }, [headers]);
+
+  // Handle click outside calendar to close it
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!showCalendar) return;
+      
+      const target = event.target as HTMLElement;
+      const calendarButton = document.querySelector('[data-calendar-button]');
+      const calendarDropdown = document.querySelector('[data-calendar-dropdown]');
+      
+      // Check if click is outside both button and dropdown
+      if (
+        calendarButton && !calendarButton.contains(target) &&
+        calendarDropdown && !calendarDropdown.contains(target)
+      ) {
+        setShowCalendar(false);
+        // Clear timer when closing
+        if (calendarInactivityTimerRef.current) {
+          clearTimeout(calendarInactivityTimerRef.current);
+        }
+      }
+    };
+    
+    if (showCalendar) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [showCalendar]);
+
   const isOther = mode === 'other' && !!otherData;
   const activeData = isOther && otherData ? otherData : baseData;
   const activeToday = isOther && otherData ? otherData.today : baseData?.today;
   const activeTomorrow = isOther && otherData ? otherData.tomorrow : baseData?.tomorrow;
   const activeScheduleArray = isOther ? otherSchedule : mySchedule;
+
+  // Format date string to be more readable (e.g., "1November" -> "1 Nov")
+  const formatDate = (dateStr: string) => {
+    const match = dateStr.match(/^(\d+)([A-Za-z]+)$/);
+    if (match) {
+      const day = match[1];
+      const month = match[2];
+      const monthAbbr = month.substring(0, 3);
+      return `${day} ${monthAbbr}`;
+    }
+    return dateStr;
+  };
 
   const getShiftChangeForDate = (date: string) => {
     if (!approvedRequests.length) return null;
@@ -272,7 +434,7 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
   };
 
   return (
-    <div className="container" data-view-mode={mode} style={{background: '#f5f7fa', minHeight: '100vh'}}>
+    <div className="container" data-view-mode={mode} style={{background: '#f5f7fa', minHeight: '100vh', display: 'flex', flexDirection: 'column'}}>
       {/* Static Header */}
       <div style={{
         background: '#fff',
@@ -283,7 +445,7 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
         zIndex: 100,
         boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
       }}>
-        <div style={{maxWidth: '1400px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
+        <div style={{width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px'}}>
           <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
             {tenantInfo?.logo_url && (
               <img src={tenantInfo.logo_url} alt={tenantInfo.organization_name} style={{width: '40px', height: '40px', objectFit: 'contain', borderRadius: '6px'}} />
@@ -294,26 +456,55 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
               </h1>
               <p style={{margin: 0, fontSize: '13px', color: '#6b7280'}}>Schedule Management</p>
             </div>
+            {isOther && otherData && (
+              <div style={{marginLeft: '32px', paddingLeft: '32px', borderLeft: '2px solid #e5e7eb'}}>
+                <p style={{margin: 0, fontSize: '13px', color: '#6b7280'}}>Viewing</p>
+                <h2 style={{margin: 0, fontSize: '18px', fontWeight: 600, color: '#111827'}}>{otherData.employee.name}</h2>
+              </div>
+            )}
           </div>
-          <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
-            <div style={{textAlign: 'right', marginRight: '8px'}}>
-              <div style={{fontSize: '14px', fontWeight: 600, color: '#111827'}}>{fullName}</div>
+          <div style={{display: 'flex', alignItems: 'center', gap: '16px'}}>
+            {profileData?.photo && (
+              <img 
+                src={profileData.photo} 
+                alt={fullName}
+                style={{
+                  width: '56px',
+                  height: '56px',
+                  borderRadius: '6px',
+                  objectFit: 'cover',
+                  border: '1px solid #e5e7eb',
+                  flexShrink: 0
+                }}
+              />
+            )}
+            <div style={{display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px'}}>
+              <div style={{fontSize: '14px', fontWeight: 600, color: '#111827'}}>{isOther ? fullName : fullName}</div>
               <div style={{fontSize: '12px', color: '#6b7280'}}>ID: {employeeId}</div>
+              {baseData?.employee?.team && (
+                <div style={{fontSize: '12px', color: '#4b5563', fontWeight: 500}}>Team: {baseData.employee.team}</div>
+              )}
             </div>
+            <NotificationPanel employeeId={employeeId} />
+            <button onClick={() => setShowProfileModal(true)} style={{padding: '8px 12px', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', color: '#374151'}}>
+              <Settings size={16} />
+            </button>
             <button onClick={refreshAll} disabled={refreshing} style={{padding: '8px 12px', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: '6px', cursor: refreshing ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', color: '#374151'}}>
               <RefreshCw size={16} style={{animation: refreshing ? 'spin 1s linear infinite' : 'none'}} />
               {refreshing ? 'Refreshing...' : 'Refresh'}
             </button>
-            <button onClick={()=>setShowProfile(true)} style={{padding: '8px 12px', background: '#6b7280', border: 'none', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', color: '#fff', fontWeight: 500}}>
-              <Settings size={16} /> Settings
-            </button>
+            {isOther && (
+              <button onClick={resetToMySchedule} style={{padding: '8px 16px', background: '#6b7280', border: 'none', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', color: '#fff', fontWeight: 500}}>
+                ← Back
+              </button>
+            )}
             <button onClick={onLogout} style={{padding: '8px 16px', background: '#ef4444', border: 'none', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', color: '#fff', fontWeight: 500}}>
               <LogOut size={16} /> Logout
             </button>
           </div>
         </div>
       </div>
-      <div className="app-container" style={{maxWidth: '1400px', margin: '0 auto', padding: '24px', position: 'relative', zIndex: 1}} key={rerenderKey}>
+      <div className="app-container" style={{width: '100%', padding: '0', position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', flex: 1}} key={rerenderKey}>
         <div className="app-header" style={{display: 'none'}}>
           <div>
             <h2>Shift Dashboard</h2>
@@ -349,51 +540,7 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
         {error && <div className="error-message">{error}</div>}
 
         {!loading && activeData &&
-          <>
-            {/* Viewing Info Banner - Show whose schedule is being displayed */}
-            {isOther && otherData && (
-              <div style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                color: '#fff',
-                padding: '16px 24px',
-                borderRadius: '12px',
-                marginBottom: '20px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                boxShadow: '0 4px 6px rgba(102, 126, 234, 0.3)'
-              }}>
-                <div>
-                  <div style={{fontSize: '13px', opacity: 0.9, marginBottom: '4px'}}>Currently Viewing</div>
-                  <div style={{fontSize: '20px', fontWeight: 700}}>
-                    {otherData.employee.name}'s Schedule
-                  </div>
-                  <div style={{fontSize: '14px', opacity: 0.85, marginTop: '2px'}}>
-                    {otherData.employee.team} • ID: {otherData.employee.id}
-                  </div>
-                </div>
-                <button
-                  onClick={resetToMySchedule}
-                  style={{
-                    padding: '10px 20px',
-                    background: 'rgba(255, 255, 255, 0.2)',
-                    border: '1px solid rgba(255, 255, 255, 0.3)',
-                    borderRadius: '8px',
-                    color: '#fff',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: 500,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    backdropFilter: 'blur(10px)'
-                  }}
-                >
-                  <ArrowLeft size={16} /> Back to My Schedule
-                </button>
-              </div>
-            )}
-
+          <div style={{padding: '24px', flex: 1, display: 'flex', flexDirection: 'column'}}>
             {/* Today & Tomorrow Cards - Side by Side */}
             <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginBottom: '24px'}}>
               {/* Today's Shift Card */}
@@ -408,25 +555,27 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
                   Today&apos;s Shift
                 </div>
                 <div style={{fontSize: '12px', color: '#9ca3af', marginBottom: '8px'}}>
-                  {activeToday?.date || 'N/A'}
+                  {activeToday?.weekday && activeToday?.date ? `${activeToday.weekday}, ${activeToday.date}` : activeToday?.date || 'N/A'}
                 </div>
-                <div style={{fontSize: '32px', fontWeight: 700, color: '#111827', letterSpacing: '-0.02em'}}>
-                  {(() => {
-                    const todayDate = activeToday?.date;
-                    const todayShift = activeToday?.shift;
-                    const change = !isOther && todayDate ? getShiftChangeForDate(todayDate) : null;
-                    if (change) {
-                      return (
-                        <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
-                          <span style={{textDecoration: 'line-through', color: '#9ca3af', fontSize: '24px'}}>{change.current_shift || change.requester_shift}</span>
-                          <span>→</span>
-                          <span style={{color: '#10b981'}}>{todayShift}</span>
+                {(() => {
+                  const todayChange = activeData?.shift_changes?.find(c => c.date === activeToday?.date);
+                  return (
+                    <div style={{fontSize: '32px', fontWeight: 700, color: '#111827', letterSpacing: '-0.02em'}}>
+                      {todayChange ? (
+                        <div>
+                          <span style={{textDecoration: 'line-through', color: '#d1d5db', fontSize: '24px'}}>
+                            {todayChange.original_shift}
+                          </span>
+                          <div style={{fontSize: '28px', color: '#10b981', fontWeight: 700, marginTop: '4px'}}>
+                            → {todayChange.current_shift}
+                          </div>
                         </div>
-                      );
-                    }
-                    return todayShift || 'N/A';
-                  })()}
-                </div>
+                      ) : (
+                        activeToday?.shift || 'N/A'
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Tomorrow's Shift Card */}
@@ -441,25 +590,27 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
                   Tomorrow&apos;s Shift
                 </div>
                 <div style={{fontSize: '12px', color: '#9ca3af', marginBottom: '8px'}}>
-                  {activeTomorrow?.date || 'N/A'}
+                  {activeTomorrow?.weekday && activeTomorrow?.date ? `${activeTomorrow.weekday}, ${activeTomorrow.date}` : activeTomorrow?.date || 'N/A'}
                 </div>
-                <div style={{fontSize: '32px', fontWeight: 700, color: '#111827', letterSpacing: '-0.02em'}}>
-                  {(() => {
-                    const tomorrowDate = activeTomorrow?.date;
-                    const tomorrowShift = activeTomorrow?.shift;
-                    const change = !isOther && tomorrowDate ? getShiftChangeForDate(tomorrowDate) : null;
-                    if (change) {
-                      return (
-                        <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
-                          <span style={{textDecoration: 'line-through', color: '#9ca3af', fontSize: '24px'}}>{change.current_shift || change.requester_shift}</span>
-                          <span>→</span>
-                          <span style={{color: '#10b981'}}>{tomorrowShift}</span>
+                {(() => {
+                  const tomorrowChange = activeData?.shift_changes?.find(c => c.date === activeTomorrow?.date);
+                  return (
+                    <div style={{fontSize: '32px', fontWeight: 700, color: '#111827', letterSpacing: '-0.02em'}}>
+                      {tomorrowChange ? (
+                        <div>
+                          <span style={{textDecoration: 'line-through', color: '#d1d5db', fontSize: '24px'}}>
+                            {tomorrowChange.original_shift}
+                          </span>
+                          <div style={{fontSize: '28px', color: '#10b981', fontWeight: 700, marginTop: '4px'}}>
+                            → {tomorrowChange.current_shift}
+                          </div>
                         </div>
-                      );
-                    }
-                    return tomorrowShift || 'N/A';
-                  })()}
-                </div>
+                      ) : (
+                        activeTomorrow?.shift || 'N/A'
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
@@ -472,86 +623,153 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
               boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
               marginBottom: '24px'
             }}>
-              {selectedDate && (
+              {showSelectedDateSection && selectedDate && (
                 <div style={{
                   background: '#f9fafb',
                   border: '1px solid #e5e7eb',
                   borderRadius: '8px',
                   padding: '16px',
-                  marginBottom: '20px'
+                  marginBottom: '20px',
+                  position: 'relative'
                 }}>
-                  <div style={{fontSize: '13px', fontWeight: 600, color: '#6b7280', marginBottom: '6px'}}>Selected Date</div>
-                  <div style={{fontSize: '18px', fontWeight: 600, color: '#111827'}}>{selectedDate}</div>
-                  <div style={{fontSize: '24px', fontWeight: 700, color: '#3b82f6', marginTop: '4px'}}>
-                    {SHIFT_MAP[selectedShift] || selectedShift || 'N/A'}
+                  <button
+                    onClick={closeSelectedDateSection}
+                    style={{
+                      position: 'absolute',
+                      top: '12px',
+                      right: '12px',
+                      background: 'none',
+                      border: 'none',
+                      fontSize: '20px',
+                      cursor: 'pointer',
+                      color: '#6b7280',
+                      padding: '4px 8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                    title="Close"
+                  >
+                    ✕
+                  </button>
+                  <div style={{fontSize: '13px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '12px'}}>Selected Date</div>
+                  <div style={{fontSize: '14px', color: '#9ca3af', marginBottom: '8px'}}>
+                    {getWeekdayFromDateHeader(selectedDate) && `${getWeekdayFromDateHeader(selectedDate)}, `}
+                    {formatDate(selectedDate)}
                   </div>
-                  <div style={{fontSize: '13px', color: '#6b7280', marginTop: '4px'}}>
-                    Shift Code: {selectedShift || 'N/A'}
-                  </div>
-                  
-                  {/* Show schedule change if any for this date */}
-                  {!isOther && (() => {
-                    const change = getShiftChangeForDate(selectedDate);
-                    if (change) {
-                      return (
-                        <div style={{
-                          marginTop: '12px',
-                          padding: '12px',
-                          background: '#dbeafe',
-                          border: '1px solid #93c5fd',
-                          borderRadius: '6px'
-                        }}>
-                          <div style={{fontSize: '12px', fontWeight: 600, color: '#1e40af', marginBottom: '4px'}}>
-                            Schedule Change Applied
-                          </div>
-                          <div style={{fontSize: '13px', color: '#1e3a8a'}}>
-                            Original: <span style={{textDecoration: 'line-through'}}>{change.current_shift || change.requester_shift}</span>
-                            {' → '}
-                            <span style={{fontWeight: 600}}>{SHIFT_MAP[selectedShift] || selectedShift}</span>
-                          </div>
-                          {change.type === 'swap' && change.target_employee_name && (
-                            <div style={{fontSize: '12px', color: '#3730a3', marginTop: '4px'}}>
-                              Swapped with: {change.target_employee_name}
+                  {(() => {
+                    const selectedChange = activeData?.shift_changes?.find(c => c.date === selectedDate);
+                    const shiftCode = getShiftForDate(selectedDate);
+                    const shiftTime = SHIFT_MAP[shiftCode] || shiftCode || 'N/A';
+                    
+                    return (
+                      <div style={{fontSize: '28px', fontWeight: 700, color: '#111827', letterSpacing: '-0.02em'}}>
+                        {selectedChange ? (
+                          <div>
+                            <span style={{textDecoration: 'line-through', color: '#d1d5db', fontSize: '22px'}}>
+                              {selectedChange.original_shift}
+                            </span>
+                            <div style={{fontSize: '24px', color: '#10b981', fontWeight: 700, marginTop: '4px'}}>
+                              → {selectedChange.current_shift}
                             </div>
-                          )}
-                        </div>
-                      );
-                    }
-                    return null;
+                          </div>
+                        ) : (
+                          shiftTime
+                        )}
+                      </div>
+                    );
                   })()}
                 </div>
               )}
 
-              {headers.length > 0 && activeScheduleArray.length > 0 && (
-                <div>
+              {headers.length > 0 && (
+                <div 
+                  style={{
+                    position: 'relative',
+                    display: 'inline-block'
+                  }}
+                >
                   <button 
-                    onClick={() => setShowCalendar(!showCalendar)}
+                    data-calendar-button
+                    onClick={() => {
+                      setShowCalendar(true);
+                      resetCalendarInactivityTimer();
+                    }}
                     style={{
-                      padding: '10px 20px',
+                      padding: '10px 16px',
                       background: showCalendar ? '#3b82f6' : '#f3f4f6',
                       color: showCalendar ? '#fff' : '#374151',
                       border: '1px solid #e5e7eb',
-                      borderRadius: '8px',
+                      borderRadius: '6px',
                       cursor: 'pointer',
-                      fontSize: '14px',
+                      fontSize: '13px',
                       fontWeight: 500,
-                      marginBottom: '16px',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '8px'
+                      gap: '6px',
+                      transition: 'all 0.2s ease'
                     }}
                   >
-                    <CalendarIcon size={16} /> {showCalendar ? 'Hide Calendar' : 'Show Calendar'}
+                    <CalendarIcon size={14} /> Calendar
                   </button>
-                  {showCalendar && (
-                    <div style={{marginTop: '16px', maxWidth: '298px'}}>
+                  
+                  {showCalendar && activeScheduleArray.length > 0 && (
+                    <div 
+                      data-calendar-dropdown
+                      style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: 0,
+                        marginTop: '8px',
+                        background: '#fff',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '8px',
+                        padding: '16px',
+                        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+                        zIndex: 50,
+                        animation: 'slideDown 0.2s ease-out',
+                        width: '360px'
+                      }}
+                      onMouseEnter={resetCalendarInactivityTimer}
+                      onMouseMove={resetCalendarInactivityTimer}
+                    >
                       <MonthCompactCalendar 
                         headers={headers}
-                        selectedDate={selectedDate}
-                        onSelect={(d)=>onCalendarSelect(d, activeScheduleArray[headers.indexOf(d)] || '')}
-                        showWeekdays={true}
-                        showNavigation={true}
+                        selectedDate={selectedDate || todayDateHeader}
+                        onSelect={(d)=>{
+                          resetCalendarInactivityTimer();
+                          // Only show Selected Date section if it's different from today
+                          if (d !== todayDateHeader) {
+                            onCalendarSelect(d, getShiftForDate(d));
+                          }
+                        }}
+                        showWeekdays
+                        showNavigation
                       />
+                    </div>
+                  )}
+                  {showCalendar && activeScheduleArray.length === 0 && (
+                    <div 
+                      data-calendar-dropdown
+                      style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: 0,
+                        marginTop: '8px',
+                        padding: '16px',
+                        textAlign: 'center',
+                        color: '#6b7280',
+                        background: '#f9fafb',
+                        borderRadius: '8px',
+                        border: '1px solid #e5e7eb',
+                        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+                        zIndex: 50,
+                        animation: 'slideDown 0.2s ease-out'
+                      }}
+                      onMouseEnter={resetCalendarInactivityTimer}
+                      onMouseMove={resetCalendarInactivityTimer}
+                    >
+                      No schedule data available.
                     </div>
                   )}
                 </div>
@@ -566,42 +784,6 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
                   paddingTop: '20px',
                   borderTop: '1px solid #e5e7eb'
                 }}>
-                  <button 
-                    onClick={()=>setShowChange(true)}
-                    style={{
-                      padding: '12px 20px',
-                      background: '#3b82f6',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      fontSize: '14px',
-                      fontWeight: 500,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px'
-                    }}
-                  >
-                    <Edit3 size={16} /> Request Shift Change
-                  </button>
-                  <button 
-                    onClick={()=>setShowSwap(true)}
-                    style={{
-                      padding: '12px 20px',
-                      background: '#10b981',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      fontSize: '14px',
-                      fontWeight: 500,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px'
-                    }}
-                  >
-                    <ArrowLeftRight size={16} /> Request Swap
-                  </button>
                   <button 
                     onClick={()=>setShowShiftView(true)}
                     style={{
@@ -619,6 +801,42 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
                     }}
                   >
                     <Eye size={16} /> View All Shifts
+                  </button>
+                  <button 
+                    onClick={() => setShowChange(true)}
+                    style={{
+                      padding: '12px 20px',
+                      background: '#10b981',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontWeight: 500,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    <Edit3 size={16} /> Request Change
+                  </button>
+                  <button 
+                    onClick={() => setShowSwap(true)}
+                    style={{
+                      padding: '12px 20px',
+                      background: '#3b82f6',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontWeight: 500,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    <ArrowLeftRight size={16} /> Request Swap
                   </button>
                 </div>
               )}
@@ -657,8 +875,8 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
             {baseData && (
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                gap: '20px',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: '12px',
                 marginBottom: '24px'
               }}>
                 <StatCard
@@ -685,9 +903,24 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
                   details={baseData.shift_changes}
                   detailsType="changes"
                 />
+                {approvedRequests.length > 0 && (
+                  <StatCard
+                    icon={<CheckCircle2 size={18} />}
+                    value={approvedRequests.length}
+                    label="Approved Shifts"
+                    subtitle="Approved requests"
+                    details={approvedRequests.map(r => ({
+                      date: r.date,
+                      type: r.type,
+                      original_shift: r.current_shift || r.requester_shift || 'N/A',
+                      current_shift: r.requested_shift || r.target_shift || 'N/A'
+                    }))}
+                    detailsType="changes"
+                  />
+                )}
               </div>
             )}
-          </>
+          </div>
         }
       </div>
 
@@ -722,6 +955,16 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
         />
       }
 
+      {baseData && (
+        <ProfileManagement
+          open={showProfileModal}
+          onClose={()=>setShowProfileModal(false)}
+          employeeId={employeeId}
+          employeeName={baseData.employee.name}
+          onProfileUpdated={handleProfileUpdated}
+        />
+      )}
+
       {roster && (
         <ShiftView
           open={showShiftView}
@@ -730,16 +973,11 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
           headers={headers}
         />
       )}
-      
-      {baseData && (
-        <EmployeeProfileModal
-          open={showProfile}
-          onClose={()=>setShowProfile(false)}
-          employeeId={employeeId}
-          employeeName={baseData.employee.name}
-          employeeTeam={baseData.employee.team}
-        />
-      )}
+
+      <NotificationToast 
+        notification={notification}
+        onClose={() => setNotification(null)}
+      />
       
       <div style={{position: 'fixed', bottom: '12px', left: '12px', fontSize: '0.75rem', color: '#9ca3af', zIndex: 1}}>
         Developed by Aether Bangladesh
@@ -749,6 +987,16 @@ export default function ClientDashboard({employeeId, fullName, onLogout}:Props) 
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
+        }
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
       `}</style>
     </div>

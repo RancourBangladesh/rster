@@ -1,0 +1,157 @@
+{
+  "public_pages": [
+    {
+      "id": "01_landing",
+      "name": "Landing Page",
+      "url": "http://localhost:3000/",
+      "desc": "Main landing page with features, pricing preview, and call-to-action"
+    },
+    {
+      "id": "02_pricing",
+      "name": "Pricing Page",
+      "url": "http://localhost:3000/pricing",
+      "desc": "Detailed pricing plans - Monthly (\u09f33,000) and Yearly (\u09f330,000)"
+    },
+    {
+      "id": "03_about",
+      "name": "About Page",
+      "url": "http://localhost:3000/about",
+      "desc": "Company information and mission"
+    },
+    {
+      "id": "04_contact",
+      "name": "Contact Page",
+      "url": "http://localhost:3000/contact",
+      "desc": "Contact form for inquiries"
+    }
+  ],
+  "developer_portal": [
+    {
+      "id": "05_dev_login",
+      "name": "Developer Login",
+      "url": "http://localhost:3000/developer/login",
+      "desc": "Developer authentication page"
+    },
+    {
+      "id": "06_dev_dashboard",
+      "name": "Developer Dashboard",
+      "desc": "Tenant management interface for developers"
+    },
+    {
+      "id": "07_dev_tenants",
+      "name": "Tenant List",
+      "desc": "View and manage all tenants"
+    },
+    {
+      "id": "08_dev_tenant_detail",
+      "name": "Tenant Details",
+      "desc": "Detailed view of tenant configuration"
+    },
+    {
+      "id": "09_dev_cms",
+      "name": "Landing CMS",
+      "desc": "Content management for landing page"
+    }
+  ],
+  "admin_panel": [
+    {
+      "id": "10_admin_login",
+      "name": "Admin Login",
+      "desc": "Admin authentication for tenant"
+    },
+    {
+      "id": "11_admin_dashboard",
+      "name": "Admin Dashboard",
+      "desc": "Main admin interface with tabs"
+    },
+    {
+      "id": "12_admin_roster",
+      "name": "Roster Data View",
+      "desc": "View and edit employee schedules"
+    },
+    {
+      "id": "13_admin_employees",
+      "name": "Employee Management",
+      "desc": "Add, edit, deactivate employees"
+    },
+    {
+      "id": "14_admin_csv",
+      "name": "CSV Import",
+      "desc": "Bulk import rosters from CSV"
+    },
+    {
+      "id": "15_admin_sync",
+      "name": "Google Sheets Sync",
+      "desc": "Sync with Google Sheets"
+    },
+    {
+      "id": "16_admin_requests",
+      "name": "Schedule Requests",
+      "desc": "Approve/reject employee requests"
+    },
+    {
+      "id": "17_admin_settings",
+      "name": "Settings",
+      "desc": "Organization configuration and RBAC"
+    }
+  ],
+  "employee_portal": [
+    {
+      "id": "18_emp_login",
+      "name": "Employee Login",
+      "desc": "Employee authentication"
+    },
+    {
+      "id": "19_emp_dashboard",
+      "name": "Employee Dashboard",
+      "desc": "Personal schedule overview"
+    },
+    {
+      "id": "20_emp_my_schedule",
+      "name": "My Schedule",
+      "desc": "Personal shift calendar"
+    },
+    {
+      "id": "21_emp_team_schedule",
+      "name": "Team Schedule",
+      "desc": "View colleagues' shifts"
+    },
+    {
+      "id": "22_emp_shift_change",
+      "name": "Shift Change Request",
+      "desc": "Request to change shift"
+    },
+    {
+      "id": "23_emp_shift_swap",
+      "name": "Shift Swap Request",
+      "desc": "Request to swap with colleague"
+    },
+    {
+      "id": "24_emp_notifications",
+      "name": "Notifications",
+      "desc": "View announcements and updates"
+    }
+  ],
+  "testing": [
+    {
+      "id": "25_tenant2_isolation",
+      "name": "Tenant Isolation Test",
+      "desc": "Verify data isolation between tenants"
+    },
+    {
+      "id": "26_shift_modification",
+      "name": "Shift Modification",
+      "desc": "Admin modifying employee shift"
+    },
+    {
+      "id": "27_request_approval",
+      "name": "Request Approval",
+      "desc": "Admin approving shift request"
+    },
+    {
+      "id": "28_audit_log",
+      "name": "Audit Log",
+      "desc": "Modification history tracking"
+    }
+  ]
+}
