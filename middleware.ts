@@ -107,6 +107,9 @@ export const config = {
     '/about',
     '/pricing',
     '/contact',
-    '/client'
+    '/client',
+    '/:tenantSlug/admin',
+    '/:tenantSlug/employee',
+    '/:tenantSlug/user'
   ]
 };
