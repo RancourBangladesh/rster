@@ -10,7 +10,23 @@ export async function GET(req: NextRequest) {
     const hostname = req.headers.get('host') || '';
     const subdomain = getSubdomainFromHostname(hostname);
     
+    // TESTING MODE: If no subdomain, use default TechCorp tenant
     if (!subdomain) {
+      const tenant = getTenantById('96b645ca-8dcc-47b7-ad81-f2b0902e9012'); // TechCorp
+      
+      if (tenant) {
+        return NextResponse.json({ 
+          success: true,
+          tenant: {
+            name: tenant.name,
+            slug: tenant.slug,
+            is_active: tenant.is_active,
+            organization_name: tenant.settings?.organization_name || tenant.name,
+            logo_url: tenant.settings?.logo_url || null
+          }
+        });
+      }
+      
       return NextResponse.json({ 
         success: false,
         tenant: null,

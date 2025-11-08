@@ -71,11 +71,13 @@ export function middleware(req: NextRequest) {
   
   // MAIN DOMAIN LOGIC
   if (isMainDomain) {
+    // TEMPORARILY DISABLED FOR SCREENSHOT CAPTURE
+    // Allow admin and employee access on main domain for testing/screenshots
     // Route protection: Main domain cannot access /employee or /admin
-    if (path.startsWith('/employee') || path.startsWith('/admin')) {
-      url.pathname = '/';
-      return NextResponse.redirect(url);
-    }
+    // if (path.startsWith('/employee') || path.startsWith('/admin')) {
+    //   url.pathname = '/';
+    //   return NextResponse.redirect(url);
+    // }
     
     // Handle developer routes
     if (path.startsWith('/developer')) {
