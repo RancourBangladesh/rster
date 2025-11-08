@@ -123,15 +123,15 @@ def create_level1_dfd():
     dfd = Digraph('RosterBhai_Level1_DFD', format='png')
     dfd.attr(rankdir='TB', size='16,14')
     
-    # Processes (circles)
+    # Processes (circles) - NO VERSION NUMBERS
     dfd.attr('node', shape='circle', style='filled', fillcolor='lightblue', fontsize='11')
-    dfd.node('P1', '1.0\nUser\nAuthentication', width='1.5')
-    dfd.node('P2', '2.0\nTenant\nManagement', width='1.5')
-    dfd.node('P3', '3.0\nEmployee\nManagement', width='1.5')
-    dfd.node('P4', '4.0\nRoster\nManagement', width='1.5')
-    dfd.node('P5', '5.0\nSchedule Request\nManagement', width='1.5')
-    dfd.node('P6', '6.0\nNotification\nManagement', width='1.5')
-    dfd.node('P7', '7.0\nReporting &\nAnalytics', width='1.5')
+    dfd.node('P1', 'User\nAuthentication', width='1.5')
+    dfd.node('P2', 'Tenant\nManagement', width='1.5')
+    dfd.node('P3', 'Employee\nManagement', width='1.5')
+    dfd.node('P4', 'Roster\nManagement', width='1.5')
+    dfd.node('P5', 'Schedule Request\nManagement', width='1.5')
+    dfd.node('P6', 'Notification\nManagement', width='1.5')
+    dfd.node('P7', 'Reporting &\nAnalytics', width='1.5')
     
     # External entities
     dfd.attr('node', shape='box', style='filled', fillcolor='lightyellow', fontsize='10')
@@ -346,6 +346,14 @@ def create_er_diagram():
 if __name__ == "__main__":
     print("Generating RosterBhai Diagrams...\n")
     
+    # Create output directories
+    import os
+    base_path = '/home/runner/work/rster/rster/Documentation'
+    os.makedirs(f'{base_path}/diagrams', exist_ok=True)
+    os.makedirs(f'{base_path}/diagrams_pptx', exist_ok=True)
+    os.makedirs(f'{base_path}/diagrams_editable', exist_ok=True)
+    
+    print("📊 Generating diagrams for documentation...")
     create_use_case_diagram()
     create_context_dfd()
     create_level1_dfd()
@@ -354,4 +362,6 @@ if __name__ == "__main__":
     
     print("\n✓ All diagrams generated successfully!")
     print("\nDiagram files location:")
-    print("  /home/runner/work/rster/rster/Documentation/diagrams/")
+    print(f"  Documentation: {base_path}/diagrams/")
+    print(f"  PowerPoint:    {base_path}/diagrams_pptx/ (copies)")
+    print(f"  Editable:      {base_path}/diagrams_editable/ (SVG format)")

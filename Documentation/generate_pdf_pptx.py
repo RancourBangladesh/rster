@@ -260,28 +260,29 @@ class PPTXGenerator:
             p.font.size = Pt(18)
     
     def add_image_slide(self, title, image_path):
-        """Add slide with image"""
+        """Add slide with image - PROPER ASPECT RATIO"""
         slide_layout = self.prs.slide_layouts[6]  # Blank layout
         slide = self.prs.slides.add_slide(slide_layout)
         
         # Add title
         left = Inches(0.5)
-        top = Inches(0.5)
+        top = Inches(0.3)
         width = Inches(9)
-        height = Inches(0.8)
+        height = Inches(0.7)
         txBox = slide.shapes.add_textbox(left, top, width, height)
         tf = txBox.text_frame
         p = tf.paragraphs[0]
         p.text = title
         p.font.bold = True
-        p.font.size = Pt(32)
+        p.font.size = Pt(28)
         p.alignment = PP_ALIGN.CENTER
         
-        # Add image
+        # Add image with proper aspect ratio - no stretching
         if os.path.exists(image_path):
-            left = Inches(1)
-            top = Inches(1.5)
-            slide.shapes.add_picture(image_path, left, top, width=Inches(8), height=Inches(5))
+            left = Inches(0.75)
+            top = Inches(1.2)
+            # Use width only, let height auto-calculate to maintain aspect ratio
+            slide.shapes.add_picture(image_path, left, top, width=Inches(8.5))
     
     def generate_presentation(self, output_file):
         """Generate complete PowerPoint presentation"""
@@ -372,14 +373,14 @@ class PPTXGenerator:
             ]
         )
         
-        # Add diagram slides
+        # Add diagram slides - using diagrams_pptx folder for better quality
         base_path = "/home/runner/work/rster/rster/Documentation"
         diagrams = [
-            ("Use Case Diagram", "diagrams/Use_Case_Diagram.png"),
-            ("System Architecture", "diagrams/System_Architecture.png"),
-            ("Context Data Flow Diagram", "diagrams/Context_DFD.png"),
-            ("Level 1 Data Flow Diagram", "diagrams/Level1_DFD.png"),
-            ("Entity Relationship Diagram", "diagrams/ER_Diagram.png")
+            ("Use Case Diagram", "diagrams_pptx/Use_Case_Diagram.png"),
+            ("System Architecture", "diagrams_pptx/System_Architecture.png"),
+            ("Context Data Flow Diagram", "diagrams_pptx/Context_DFD.png"),
+            ("Level 1 Data Flow Diagram - NO VERSION NUMBERS", "diagrams_pptx/Level1_DFD.png"),
+            ("Entity Relationship Diagram", "diagrams_pptx/ER_Diagram.png")
         ]
         
         for diagram_title, diagram_path in diagrams:
