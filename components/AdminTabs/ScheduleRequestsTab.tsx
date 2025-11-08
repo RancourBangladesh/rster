@@ -71,10 +71,14 @@ export default function ScheduleRequestsTab({id}:Props) {
 
   async function act(requestId:string, status:'approved'|'rejected') {
     if (!confirm(`Mark request ${requestId} as ${status}?`)) return;
+    
+    // Prompt for optional admin message
+    const adminMessage = prompt(`Optional message to employee (leave blank for none):`);
+    
     const res = await fetch('/api/schedule-requests/update-status',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({requestId, status})
+      body:JSON.stringify({requestId, status, adminMessage: adminMessage || undefined})
     }).then(r=>r.json()).catch(()=>null);
     if (!res?.success) alert(res?.error || 'Action failed');
     load();

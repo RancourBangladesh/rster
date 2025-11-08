@@ -29,6 +29,15 @@ interface Tenant {
     organization_name?: string;
     logo_url?: string;
   };
+  subscription?: {
+    plan: 'monthly'|'yearly';
+    status: 'pending'|'active';
+    created_at: string;
+    started_at?: string;
+    expires_at?: string;
+  };
+  contact_email?: string;
+  contact_phone?: string;
 }
 
 interface TenantStats {
@@ -162,6 +171,8 @@ export default function DeveloperDashboard() {
   }
 
   const activeTenants = tenants.filter(t => t.is_active).length;
+  const monthlyTenants = tenants.filter(t => t.subscription?.plan==='monthly').length;
+  const yearlyTenants = tenants.filter(t => t.subscription?.plan==='yearly').length;
   const totalUsers = Object.values(stats).reduce((sum, s) => sum + s.users, 0);
   const totalEmployees = Object.values(stats).reduce((sum, s) => sum + s.employees, 0);
 
@@ -179,6 +190,10 @@ export default function DeveloperDashboard() {
           </div>
         </div>
         <div className="dev-header-actions">
+          <button onClick={() => router.push('/developer/landing-cms')} className="btn-secondary-action">
+            <Settings size={18} />
+            Landing CMS
+          </button>
           <button onClick={() => setShowCreateModal(true)} className="btn-create">
             <Plus size={18} />
             Create Tenant
@@ -209,6 +224,24 @@ export default function DeveloperDashboard() {
             <div className="stat-info">
               <h3>{activeTenants}</h3>
               <p>Active Tenants</p>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-icon" style={{ background: '#f3e8ff' }}>
+              <span style={{fontWeight:800,color:'#7e22ce'}}>Y</span>
+            </div>
+            <div className="stat-info">
+              <h3>{yearlyTenants}</h3>
+              <p>Yearly Clients</p>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-icon" style={{ background: '#fee2e2' }}>
+              <span style={{fontWeight:800,color:'#b91c1c'}}>M</span>
+            </div>
+            <div className="stat-info">
+              <h3>{monthlyTenants}</h3>
+              <p>Monthly Clients</p>
             </div>
           </div>
           <div className="stat-card">
@@ -267,7 +300,12 @@ export default function DeveloperDashboard() {
                         <Building2 size={24} />
                       )}
                     </div>
-                    <div className="tenant-status">
+                    <div className="tenant-status" style={{display:'flex',gap:'0.5rem',alignItems:'center'}}>
+                      {tenant.subscription && (
+                        <span className="badge-plan" style={{padding:'0.25rem 0.5rem',borderRadius:12,fontSize:'0.75rem',fontWeight:700, background: tenant.subscription.plan==='yearly' ? '#ede9fe' : '#fee2e2', color: tenant.subscription.plan==='yearly' ? '#6d28d9' : '#b91c1c'}}>
+                          {tenant.subscription.plan === 'yearly' ? 'Yearly' : 'Monthly'}
+                        </span>
+                      )}
                       {tenant.is_active ? (
                         <span className="badge-active">
                           <Power size={12} /> Active
@@ -290,6 +328,9 @@ export default function DeveloperDashboard() {
                         <Calendar size={14} />
                         {new Date(tenant.created_at).toLocaleDateString()}
                       </span>
+                      {tenant.subscription && (
+                        <SubscriptionBadge sub={tenant.subscription} />
+                      )}
                     </div>
                   </div>
 
@@ -444,8 +485,8 @@ export default function DeveloperDashboard() {
             
             <div className="credentials-box">
               <h3>Admin Portal URL</h3>
-              <p><a href="/admin/login" target="_blank" style={{color: '#3b82f6'}}>
-                http://localhost:3000/admin/login
+              <p><a href={`http://${createdTenantInfo.tenant.slug}.localhost:3000/admin/login`} target="_blank" style={{color: '#3b82f6'}}>
+                http://{createdTenantInfo.tenant.slug}.localhost:3000/admin/login
               </a></p>
             </div>
             
@@ -541,6 +582,23 @@ export default function DeveloperDashboard() {
         .btn-logout:hover {
           background: #f3f4f6;
           border-color: #9ca3af;
+        }
+        .btn-secondary-action {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.75rem 1.5rem;
+          background: #f8fafc;
+          color: #2563eb;
+          border: 1px solid #cbd5e1;
+          border-radius: 8px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .btn-secondary-action:hover {
+          background: #e2e8f0;
+          border-color: #2563eb;
         }
         .dev-content {
           padding: 2rem;
@@ -933,6 +991,34 @@ export default function DeveloperDashboard() {
         }
       `}</style>
     </div>
+  );
+}
+
+function daysLeft(expires_at?: string) {
+  if (!expires_at) return null;
+  const now = new Date();
+  const until = new Date(expires_at);
+  return Math.ceil((until.getTime() - now.getTime()) / (1000*60*60*24));
+}
+
+function badgeColor(days: number|null) {
+  if (days === null) return { bg:'#e5e7eb', color:'#374151', label:'N/A' };
+  if (days <= 2) return { bg:'#fee2e2', color:'#991b1b', label:`${days}d` };
+  if (days <= 5) return { bg:'#fee2e2', color:'#b91c1c', label:`${days}d` };
+  if (days <= 15) return { bg:'#fef3c7', color:'#b45309', label:`${days}d` };
+  return { bg:'#dcfce7', color:'#15803d', label:`${days}d` };
+}
+
+function SubscriptionBadge({ sub }: { sub: NonNullable<Tenant['subscription']> }) {
+  const d = daysLeft(sub.expires_at);
+  const colors = badgeColor(d);
+  return (
+    <span style={{display:'inline-flex',alignItems:'center',gap:6}}>
+      <span style={{padding:'0.125rem 0.5rem',borderRadius:12,fontSize:12,fontWeight:700,background: colors.bg, color: colors.color}}>
+        {d === null ? 'pending' : colors.label}
+      </span>
+      {sub.status === 'pending' && <span style={{fontSize:12,color:'#9ca3af'}}>(awaiting activation)</span>}
+    </span>
   );
 }
 

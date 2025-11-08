@@ -1,15 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSessionUser } from '@/lib/auth';
-import { getAdmin } from '@/lib/dataStore';
+import { getSessionUser, getSessionTenantId } from '@/lib/auth';
+import { getAdminForTenant, loadAllForTenant } from '@/lib/dataStore.tenant';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
-  if (!getSessionUser()) return NextResponse.json({error:'Unauthorized'},{status:401});
+  const username = getSessionUser();
+  if (!username) return NextResponse.json({error:'Unauthorized'},{status:401});
+  
+  const tenantId = getSessionTenantId();
+  if (!tenantId) {
+    return NextResponse.json({error:'No tenant ID in session'},{status:400});
+  }
   
   const body = await req.json();
   const { months } = body; // Array of month names like ['Sep', 'Oct'] or null for all
   
-  const adminData = getAdmin();
+  // Load tenant data first
+  loadAllForTenant(tenantId);
+  
+  console.log('[EXPORT-CSV] Tenant ID:', tenantId);
+  console.log('[EXPORT-CSV] Months param:', months);
+  
+  const adminData = getAdminForTenant(tenantId);
+  console.log('[EXPORT-CSV] Admin data retrieved:', {
+    hasData: !!adminData,
+    teamCount: Object.keys(adminData?.teams || {}).length,
+    headerCount: adminData?.headers?.length || 0,
+    headers: adminData?.headers?.slice(0, 5)
+  });
+  
   if (!adminData || !adminData.headers || adminData.headers.length === 0) {
+    console.error('[EXPORT-CSV] Export failed: No admin data available');
     return NextResponse.json({error: 'No data available'}, {status: 400});
   }
   
@@ -20,16 +42,19 @@ export async function POST(req: NextRequest) {
     // Export all months
     filteredHeaders = adminData.headers;
     filteredIndices = adminData.headers.map((_, i) => i);
+    console.log('[EXPORT-CSV] Exporting ALL months:', filteredHeaders.length, 'headers');
   } else {
     // Filter headers by selected months
+    console.log('[EXPORT-CSV] Filtering for selected months:', months);
     adminData.headers.forEach((header, idx) => {
-      // Extract month from header (e.g., "1Sep" -> "Sep")
+      // Extract month from header (e.g., "1Nov" -> "Nov")
       const monthMatch = header.match(/[A-Za-z]+/);
       if (monthMatch && months.includes(monthMatch[0])) {
         filteredHeaders.push(header);
         filteredIndices.push(idx);
       }
     });
+    console.log('[EXPORT-CSV] Filtered result:', filteredHeaders.length, 'headers');
   }
   
   if (filteredHeaders.length === 0) {

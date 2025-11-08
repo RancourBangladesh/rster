@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { Edit, Save, Plus, Mail, UserX, Users } from 'lucide-react';
 import SendPasswordLinkModal from '../Shared/SendPasswordLinkModal';
+import Link from 'next/link';
 
 interface Props { id: string; }
 interface Employee { 
@@ -11,6 +12,7 @@ interface Employee {
   currentTeam?: string; 
   status?: 'active' | 'inactive';
   deleted_at?: string;
+  photo?: string;
 }
 interface AdminData {
   teams: Record<string, Employee[]>;
@@ -80,6 +82,27 @@ export default function EmployeeManagementTab({ id }: Props) {
   const [editingEmp, setEditingEmp] = useState<{ id: string; name: string; currentTeam?: string } | null>(null);
   const [sendingPasswordTo, setSendingPasswordTo] = useState<{ id: string; name: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [reactivateTeam, setReactivateTeam] = useState<Record<string, string>>({});
+  const [tenantId, setTenantId] = useState<string | null>(null);
+
+  // Generate a default avatar - user silhouette icon
+  function generateDefaultAvatar(name: string): string {
+    const svg = `
+      <svg width="160" height="160" viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#1e40af;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:1" />
+          </linearGradient>
+        </defs>
+        <rect width="160" height="160" fill="url(#grad)"/>
+        <circle cx="80" cy="50" r="25" fill="white" opacity="0.9"/>
+        <path d="M 50 110 Q 50 90 80 90 Q 110 90 110 110 L 110 145 Q 110 160 80 160 Q 50 160 50 145 Z" fill="white" opacity="0.9"/>
+      </svg>
+    `;
+    
+    return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+  }
 
   async function load() {
     setLoading(true);
@@ -88,9 +111,55 @@ export default function EmployeeManagementTab({ id }: Props) {
       if (res.ok) {
         const j = await res.json();
         setData(j);
+        
+        // Extract tenantId from the URL if available
+        const url = new URL(window.location.href);
+        const tid = url.searchParams.get('tenantId');
+        if (tid) {
+          setTenantId(tid);
+        }
+        
+        // Load photos asynchronously in background (don't wait for it)
+        loadPhotosAsync(j.teams, tid);
       }
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadPhotosAsync(teams: Record<string, Employee[]>, tid: string | null) {
+    try {
+      // Collect all employee IDs
+      const employeeIds: string[] = [];
+      Object.values(teams).forEach(employees => {
+        employees.forEach(emp => employeeIds.push(emp.id));
+      });
+
+      // Fetch all photos in one batch request with tenantId
+      const photoRes = await fetch('/api/admin/get-all-photos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeIds, tenantId: tid }),
+        cache: 'no-store'
+      });
+
+      if (photoRes.ok) {
+        const photosData = await photoRes.json();
+        
+        // Update state with photos
+        setData(prevData => {
+          const updatedTeams = { ...prevData.teams };
+          Object.keys(updatedTeams).forEach(teamName => {
+            updatedTeams[teamName] = updatedTeams[teamName].map((emp: Employee) => ({
+              ...emp,
+              photo: photosData[emp.id] || undefined
+            }));
+          });
+          return { ...prevData, teams: updatedTeams };
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load photos:', err);
     }
   }
   
@@ -240,6 +309,24 @@ export default function EmployeeManagementTab({ id }: Props) {
     }
   }
 
+  async function reactivate(emp: Employee, targetTeam: string) {
+    if (!targetTeam) {
+      alert('Please select a team to reactivate the employee into.');
+      return;
+    }
+    const res = await fetch('/api/admin/reactivate-employee', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ employeeId: emp.id, targetTeam })
+    }).then(r => r.json());
+
+    if (res.success) {
+      load();
+    } else {
+      alert(res.error || 'Failed to reactivate employee');
+    }
+  }
+
   function getStatusBadge(emp: Employee) {
     if (emp.status === 'inactive' || emp.currentTeam === 'Inactive Employees') {
       return <span className="badge-inactive">Inactive</span>;
@@ -371,113 +458,101 @@ export default function EmployeeManagementTab({ id }: Props) {
       {/* Employee List */}
       <div className="card" style={{ marginTop: '1rem' }}>
         <h3>Employee List ({filteredEmployees.length})</h3>
-        <div className="table-wrapper">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Status</th>
-                <th>ID</th>
-                <th>Name</th>
-                <th>Current Team</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredEmployees.length === 0 && (
-                <tr>
-                  <td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: '#999' }}>
-                    No employees found
-                  </td>
-                </tr>
-              )}
-              {filteredEmployees.map(emp => (
-                <tr 
-                  key={emp.id}
-                  style={emp.status === 'inactive' ? { backgroundColor: '#fee2e2', opacity: 0.7 } : {}}
-                >
-                  <td>{getStatusBadge(emp)}</td>
-                  <td><strong>{emp.id}</strong></td>
-                  <td>{emp.name}</td>
-                  <td>
-                    {emp.status === 'inactive' ? (
-                      <span style={{ 
-                        padding: '0.25rem 0.5rem', 
-                        backgroundColor: '#fee2e2',
-                        borderRadius: '4px',
-                        fontSize: '0.875rem'
-                      }}>
-                        {emp.currentTeam || 'Unknown'}
-                      </span>
-                    ) : (
+        {filteredEmployees.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '3rem 2rem', color: '#999' }}>
+            <p>No employees found</p>
+          </div>
+        ) : (
+          <div className="employee-tiles-grid">
+            {filteredEmployees.map(emp => (
+              <div key={emp.id} className="employee-tile">
+                {/* Profile Picture */}
+                <div className="employee-avatar">
+                  <img
+                    src={emp.photo || generateDefaultAvatar(emp.name)}
+                    alt={emp.name}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                </div>
+
+                {/* Employee Name */}
+                <div className="employee-name">{emp.name}</div>
+
+                {/* Employee ID */}
+                <div className="employee-id">ID: {emp.id}</div>
+
+                {/* Team & Status */}
+                <div className="employee-team">
+                  <strong>Team:</strong> {emp.currentTeam || 'Unassigned'}
+                </div>
+
+                {/* Status */}
+                <div className="employee-status-text">
+                  {emp.currentTeam === 'Inactive Employees' || emp.status === 'inactive' ? (
+                    <span style={{ color: '#991b1b', fontWeight: 700 }}>Deactivated</span>
+                  ) : (
+                    <span style={{ color: '#15803d', fontWeight: 700 }}>Active</span>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="employee-actions">
+                  {emp.status !== 'inactive' && emp.currentTeam !== 'Inactive Employees' && (
+                    <>
+                      <Link
+                        href={`/admin/dashboard/employee-profile/${emp.id}`}
+                        className="btn-tile edit-btn"
+                        title="Edit employee profile"
+                      >
+                        <Edit size={18} />
+                      </Link>
+                      <button
+                        className="btn-tile danger-btn"
+                        onClick={() => deleteEmployee(emp)}
+                        title="Deactivate employee"
+                      >
+                        <UserX size={18} />
+                      </button>
+                    </>
+                  )}
+                  {(emp.status === 'inactive' || emp.currentTeam === 'Inactive Employees') && (
+                    <>
                       <select
-                        value={emp.currentTeam || 'Unassigned'}
-                        onChange={(e) => reassignEmployee(emp, e.target.value)}
+                        value={reactivateTeam[emp.id] || ''}
+                        onChange={(e) => setReactivateTeam(prev => ({ ...prev, [emp.id]: e.target.value }))}
                         style={{
-                          padding: '0.25rem 0.5rem',
-                          backgroundColor: emp.currentTeam === 'Unassigned' ? '#fef3c7' : '#e0e7ff',
+                          padding: '0.3rem 0.3rem',
+                          backgroundColor: '#fef3c7',
                           border: '1px solid #d1d5db',
                           borderRadius: '4px',
-                          fontSize: '0.875rem',
-                          cursor: 'pointer'
+                          fontSize: '0.65rem',
+                          cursor: 'pointer',
+                          gridColumn: '1 / -1'
                         }}
                       >
+                        <option value="" disabled>Select team</option>
                         {allTeams.map(team => (
                           <option key={team} value={team}>{team}</option>
                         ))}
                       </select>
-                    )}
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      {emp.status !== 'inactive' && (
-                        <>
-                          <button 
-                            className="icon-btn tiny" 
-                            onClick={() => setSendingPasswordTo({ id: emp.id, name: emp.name })}
-                            title="Send password setup link"
-                            style={{ color: 'var(--primary)' }}
-                          >
-                            <Mail size={14} />
-                          </button>
-                          <button 
-                            className="icon-btn tiny" 
-                            onClick={() => setEditingEmp({ id: emp.id, name: emp.name, currentTeam: emp.currentTeam })}
-                            title="Edit employee"
-                          >
-                            <Edit size={14} />
-                          </button>
-                          <button 
-                            className="icon-btn danger tiny" 
-                            onClick={() => deleteEmployee(emp)}
-                            title="Deactivate employee"
-                          >
-                            <UserX size={14} />
-                          </button>
-                        </>
-                      )}
-                      {emp.status === 'inactive' && (
-                        <span style={{ fontSize: '0.875rem', color: '#999', fontStyle: 'italic' }}>
-                          Deactivated on {emp.deleted_at ? new Date(emp.deleted_at).toLocaleDateString() : 'N/A'}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                      <button
+                        className="btn-tile success-btn"
+                        onClick={() => reactivate(emp, reactivateTeam[emp.id])}
+                        title="Activate employee"
+                        style={{ gridColumn: '1 / -1' }}
+                      >
+                        <Users size={18} />
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {loading && <div className="inline-loading">Loading employee data...</div>}
-      
-      {editingEmp && (
-        <EditEmployeeModal
-          employee={editingEmp}
-          onSave={(name, id) => editEmployee(name, id)}
-          onCancel={() => setEditingEmp(null)}
-        />
-      )}
       
       {sendingPasswordTo && (
         <SendPasswordLinkModal
@@ -573,6 +648,153 @@ export default function EmployeeManagementTab({ id }: Props) {
           font-size: 0.75rem;
           font-weight: 600;
         }
+        
+        /* Employee Tiles Styles */
+        .employee-tiles-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+          gap: 1rem;
+          margin-top: 1rem;
+        }
+        
+        .employee-tile {
+          background: white;
+          border: 1px solid #e5e7eb;
+          border-radius: 10px;
+          overflow: hidden;
+          transition: all 0.3s ease;
+          display: flex;
+          flex-direction: column;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        
+        .employee-tile:hover {
+          box-shadow: 0 8px 12px rgba(0,0,0,0.1);
+          transform: translateY(-1px);
+          border-color: #d1d5db;
+        }
+        
+        .employee-avatar {
+          width: 100%;
+          aspect-ratio: 1;
+          background: #f3f4f6;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          overflow: hidden;
+          position: relative;
+        }
+        
+        .employee-team {
+          font-size: 0.75rem;
+          color: #374151;
+          padding: 0.4rem 0.75rem;
+          text-align: center;
+          border-top: 1px solid #f3f4f6;
+          border-bottom: 1px solid #f3f4f6;
+          word-break: break-word;
+          line-height: 1.2;
+        }
+        
+        .employee-status-text {
+          font-size: 0.8rem;
+          padding: 0.3rem 0.75rem;
+          text-align: center;
+          line-height: 1.2;
+        }
+        
+        .employee-tile {
+          position: relative;
+        }
+        
+        .employee-name {
+          font-size: 0.875rem;
+          font-weight: 700;
+          color: #111827;
+          padding: 0.5rem 0.75rem 0.15rem;
+          text-align: center;
+          word-break: break-word;
+          line-height: 1.2;
+        }
+        
+        .employee-id {
+          font-size: 0.75rem;
+          color: #6b7280;
+          padding: 0 0.75rem;
+          text-align: center;
+          font-weight: 500;
+        }
+        
+        .employee-team {
+          font-size: 0.75rem;
+          color: #374151;
+          padding: 0.4rem 0.75rem;
+          text-align: center;
+          border-top: 1px solid #f3f4f6;
+          border-bottom: 1px solid #f3f4f6;
+          word-break: break-word;
+          line-height: 1.2;
+        }
+        
+        .employee-actions {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 0.4rem;
+          padding: 0.5rem 0.75rem 0.75rem;
+          margin-top: auto;
+        }
+        
+        .btn-tile {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.3rem;
+          padding: 0.4rem;
+          border: none;
+          border-radius: 5px;
+          cursor: pointer;
+          text-decoration: none;
+          transition: all 0.2s ease;
+        }
+        
+        .btn-tile.edit-btn {
+          background: #4f46e5;
+          color: white;
+        }
+        
+        .btn-tile.edit-btn:hover {
+          background: #4338ca;
+          transform: scale(1.03);
+        }
+        
+        .btn-tile.danger-btn {
+          background: #ef4444;
+          color: white;
+        }
+        
+        .btn-tile.danger-btn:hover {
+          background: #dc2626;
+          transform: scale(1.03);
+        }
+        
+        .btn-tile.success-btn {
+          background: #10b981;
+          color: white;
+        }
+        
+        .btn-tile.success-btn:hover {
+          background: #059669;
+          transform: scale(1.03);
+        }
+        
+        .person-fallback {
+          font-size: 3rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #f3f4f6;
+        }
+        
         @media (max-width: 768px) {
           .filter-row {
             flex-direction: column;
@@ -580,6 +802,19 @@ export default function EmployeeManagementTab({ id }: Props) {
           }
           .search-box input {
             width: 100%;
+          }
+          .employee-tiles-grid {
+            grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+            gap: 0.75rem;
+          }
+          .employee-name {
+            font-size: 0.8rem;
+          }
+        }
+        
+        @media (max-width: 480px) {
+          .employee-tiles-grid {
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
           }
         }
       `}</style>

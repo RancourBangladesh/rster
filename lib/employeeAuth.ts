@@ -1,6 +1,8 @@
 import { readJSON, writeJSON } from './utils';
-import { EMPLOYEE_CREDENTIALS_FILE, getTenantEmployeeCredentialsFile } from './constants';
+import { EMPLOYEE_CREDENTIALS_FILE, getTenantEmployeeCredentialsFile, getTenantDataDir } from './constants';
 import { EmployeeCredentialsFile, EmployeeCredential } from './types';
+import fs from 'fs';
+import path from 'path';
 
 /**
  * Get employee credentials for legacy (non-tenant) system
@@ -27,7 +29,28 @@ export function saveEmployeeCredentials(data: EmployeeCredentialsFile) {
  * Save employee credentials for tenant
  */
 export function saveTenantEmployeeCredentials(tenantId: string, data: EmployeeCredentialsFile) {
-  writeJSON(getTenantEmployeeCredentialsFile(tenantId), data);
+  const filePath = getTenantEmployeeCredentialsFile(tenantId);
+  const tenantDir = getTenantDataDir(tenantId);
+  
+  console.log(`[saveTenantEmployeeCredentials] Saving to file: ${filePath}`);
+  console.log(`[saveTenantEmployeeCredentials] Tenant directory: ${tenantDir}`);
+  console.log(`[saveTenantEmployeeCredentials] Total credentials to save: ${data.credentials.length}`);
+  
+  // Ensure tenant directory exists
+  try {
+    fs.mkdirSync(tenantDir, { recursive: true });
+    console.log(`[saveTenantEmployeeCredentials] Ensured tenant directory exists`);
+  } catch (e) {
+    console.error(`[saveTenantEmployeeCredentials] Error creating tenant directory:`, e);
+  }
+  
+  data.credentials.forEach((cred, idx) => {
+    if (cred.employee_id.includes('88717')) {
+      console.log(`[saveTenantEmployeeCredentials] SLL-88717 found at index ${idx}: password="${cred.password}"`);
+    }
+  });
+  writeJSON(filePath, data);
+  console.log(`[saveTenantEmployeeCredentials] Write completed`);
 }
 
 /**
@@ -57,8 +80,13 @@ export function setEmployeePassword(employeeId: string, password: string): void 
  * Set or update employee password for tenant
  */
 export function setTenantEmployeePassword(tenantId: string, employeeId: string, password: string): void {
+  console.log(`[setTenantEmployeePassword] Starting - Tenant: ${tenantId}, Employee: ${employeeId}, Password length: ${password.length}`);
+  
   const credentials = getTenantEmployeeCredentials(tenantId);
+  console.log(`[setTenantEmployeePassword] Current credentials loaded. Total employees: ${credentials.credentials.length}`);
+  
   const existingIndex = credentials.credentials.findIndex(c => c.employee_id === employeeId);
+  console.log(`[setTenantEmployeePassword] Found existing credential at index: ${existingIndex}`);
   
   const credential: EmployeeCredential = {
     employee_id: employeeId,
@@ -69,11 +97,15 @@ export function setTenantEmployeePassword(tenantId: string, employeeId: string, 
   
   if (existingIndex >= 0) {
     credentials.credentials[existingIndex] = credential;
+    console.log(`[setTenantEmployeePassword] Updated existing credential`);
   } else {
     credentials.credentials.push(credential);
+    console.log(`[setTenantEmployeePassword] Added new credential`);
   }
   
+  console.log(`[setTenantEmployeePassword] About to save credentials`);
   saveTenantEmployeeCredentials(tenantId, credentials);
+  console.log(`[setTenantEmployeePassword] Credentials saved successfully`);
 }
 
 /**
@@ -105,11 +137,14 @@ export function verifyTenantEmployeePassword(tenantId: string, employeeId: strin
   const credentials = getTenantEmployeeCredentials(tenantId);
   const credential = credentials.credentials.find(c => c.employee_id === employeeId);
   
-  console.log(`[AUTH] verifyTenantEmployeePassword - Employee: ${employeeId}, Password: ${password}, Credential found: ${!!credential}`);
+  // Trim the incoming password to remove any whitespace
+  const trimmedPassword = password ? password.trim() : '';
+  
+  console.log(`[AUTH] verifyTenantEmployeePassword - Employee: ${employeeId}, Password length: ${trimmedPassword.length}, Credential found: ${!!credential}`);
   
   if (!credential) {
     // If no credential exists, use employee ID as default password (for backward compatibility)
-    const isValid = password === employeeId;
+    const isValid = trimmedPassword === employeeId;
     console.log(`[AUTH] No credential found, using default (employeeID as password): ${isValid}`);
     return isValid;
   }
@@ -121,8 +156,12 @@ export function verifyTenantEmployeePassword(tenantId: string, employeeId: strin
   }
   
   // TODO: Use bcrypt.compare() in production
-  const isValid = credential.password === password;
-  console.log(`[AUTH] Credential found, stored password: ${credential.password}, provided: ${password}, valid: ${isValid}`);
+  const storedPassword = credential.password || '';
+  const isValid = storedPassword === trimmedPassword;
+  console.log(`[AUTH] Credential found, stored password length: ${storedPassword.length}, provided length: ${trimmedPassword.length}, valid: ${isValid}`);
+  if (!isValid) {
+    console.log(`[AUTH] Password mismatch - Stored: "${storedPassword}", Provided: "${trimmedPassword}"`);
+  }
   return isValid;
 }
 

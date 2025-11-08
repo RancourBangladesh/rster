@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Tenant, TenantsFile, AdminUsersFile, AdminUser } from './types';
 import { readJSON, writeJSON } from './utils';
 import { TENANTS_FILE, getTenantAdminUsersFile } from './constants';
+import { addDays, isoNow } from './utils';
 
 /**
  * Get all tenants
@@ -72,6 +73,49 @@ export function createTenant(data: {
 }
 
 /**
+ * Public signup: creates an INACTIVE tenant with subscription plan and contact info
+ */
+export function createTenantPublic(data: {
+  name: string;
+  slug: string;
+  plan: 'monthly'|'yearly';
+  contact_email?: string;
+  contact_phone?: string;
+}): Tenant {
+  const tenantsData = getTenants();
+
+  if (tenantsData.tenants.find(t => t.slug === data.slug)) {
+    throw new Error('Tenant with this slug already exists');
+  }
+
+  const now = isoNow();
+  const newTenant: Tenant = {
+    id: uuidv4(),
+    name: data.name,
+    slug: data.slug,
+    created_at: now,
+    is_active: false, // pending verification
+    settings: {},
+    subscription: {
+      plan: data.plan,
+      status: 'pending',
+      created_at: now
+    },
+    contact_email: data.contact_email,
+    contact_phone: data.contact_phone
+  };
+
+  tenantsData.tenants.push(newTenant);
+  saveTenants(tenantsData);
+
+  // Initialize admin users file for later
+  const tenantAdminUsers: AdminUsersFile = { users: [] };
+  writeJSON(getTenantAdminUsersFile(newTenant.id), tenantAdminUsers);
+
+  return newTenant;
+}
+
+/**
  * Update a tenant
  */
 export function updateTenant(tenantId: string, updates: Partial<{
@@ -79,6 +123,7 @@ export function updateTenant(tenantId: string, updates: Partial<{
   slug: string;
   is_active: boolean;
   settings: Tenant['settings'];
+  subscription: Partial<Tenant['subscription']>;
 }>): Tenant {
   const tenantsData = getTenants();
   const tenantIndex = tenantsData.tenants.findIndex(t => t.id === tenantId);
@@ -94,10 +139,57 @@ export function updateTenant(tenantId: string, updates: Partial<{
     }
   }
   
-  tenantsData.tenants[tenantIndex] = {
-    ...tenantsData.tenants[tenantIndex],
-    ...updates
-  };
+  const prev = tenantsData.tenants[tenantIndex];
+  let next: Tenant = { ...prev } as Tenant;
+
+  // Merge settings
+  if (updates.name !== undefined) next.name = updates.name;
+  if (updates.slug !== undefined) next.slug = updates.slug;
+  if (updates.is_active !== undefined) next.is_active = updates.is_active;
+  if (updates.settings !== undefined) next.settings = { ...prev.settings, ...updates.settings };
+
+  // Handle subscription updates carefully
+  if (updates.subscription) {
+    const incoming = updates.subscription;
+    const existing = prev.subscription || undefined;
+    const nowIso = isoNow();
+
+    // Start with baseline
+    next.subscription = {
+      plan: incoming.plan ?? existing?.plan ?? 'monthly',
+      status: incoming.status ?? existing?.status ?? 'pending',
+      created_at: existing?.created_at ?? nowIso,
+      started_at: incoming.started_at ?? existing?.started_at,
+      expires_at: incoming.expires_at ?? existing?.expires_at,
+    };
+
+    // If tenant is active, ensure started_at/expires_at reflect current plan
+    if (next.is_active) {
+      const planDays = next.subscription.plan === 'yearly' ? 365 : 30;
+      // If plan changed or no expiry yet, reset start/expiry from now
+      const planChanged = existing && incoming.plan && incoming.plan !== existing.plan;
+      if (planChanged || !next.subscription.started_at || !next.subscription.expires_at) {
+        next.subscription.started_at = nowIso;
+        next.subscription.expires_at = addDays(nowIso, planDays);
+      }
+      next.subscription.status = 'active';
+    } else {
+      // If not active, subscription is pending and has no expiry
+      next.subscription.status = 'pending';
+      next.subscription.started_at = undefined;
+      next.subscription.expires_at = undefined;
+    }
+  }
+
+  // If activating and there is a subscription without start, start it now
+  if (updates.is_active === true && prev.is_active === false && next.subscription) {
+    const start = isoNow();
+    const planDays = next.subscription.plan === 'yearly' ? 365 : 30;
+    next.subscription.started_at = start;
+    next.subscription.status = 'active';
+    next.subscription.expires_at = addDays(start, planDays);
+  }
+  tenantsData.tenants[tenantIndex] = next;
   
   saveTenants(tenantsData);
   return tenantsData.tenants[tenantIndex];

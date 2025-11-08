@@ -11,9 +11,17 @@ export async function GET() {
   if (tenantId) {
     // Ensure tenant data is loaded
     loadAllForTenant(tenantId);
-    return NextResponse.json(getAdminForTenant(tenantId));
+    return NextResponse.json(getAdminForTenant(tenantId), {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+      }
+    });
   }
   
   // Legacy fallback
-  return NextResponse.json(getAdmin());
+  return NextResponse.json(getAdmin(), {
+    headers: {
+      'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+    }
+  });
 }

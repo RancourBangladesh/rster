@@ -9,6 +9,26 @@ export default function ClientAuthGate({onSuccess}:{onSuccess:(fullName:string,i
   const [password,setPassword]=useState('');
   const [msg,setMsg]=useState('');
   const [loading,setLoading]=useState(false);
+  const [tenantName, setTenantName] = useState('');
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Load tenant info (name and logo)
+    fetch('/api/my-schedule/tenant-info')
+      .then(res => res.json())
+      .then(data => {
+        if (data.tenant) {
+          setTenantName(data.tenant.organization_name || data.tenant.name || 'Employee Portal');
+          if (data.tenant.logo_url) {
+            console.log('[ClientAuthGate] Logo URL loaded, length:', data.tenant.logo_url.length);
+            setLogoUrl(data.tenant.logo_url);
+          } else {
+            console.log('[ClientAuthGate] No logo URL in tenant settings');
+          }
+        }
+      })
+      .catch(err => console.error('Failed to load tenant info:', err));
+  }, []);
 
   useEffect(()=>{
     const savedUser = localStorage.getItem('rosterViewerUser');
@@ -81,9 +101,28 @@ export default function ClientAuthGate({onSuccess}:{onSuccess:(fullName:string,i
       <div className="auth-container">
         <div className="auth-header">
           <div className="brand-icon">
-            <Logo size={50} />
+            {logoUrl ? (
+              <img 
+                src={logoUrl} 
+                alt={tenantName}
+                style={{
+                  width: '50px',
+                  height: '50px',
+                  borderRadius: '8px',
+                  objectFit: 'contain',
+                  background: '#f5f5f5',
+                  padding: '4px'
+                }}
+                onError={(e) => {
+                  console.error('[ClientAuthGate] Logo failed to load, using default');
+                  (e.currentTarget as HTMLImageElement).style.display = 'none';
+                }}
+              />
+            ) : (
+              <Logo size={50} />
+            )}
           </div>
-          <h1>RosterBhai</h1>
+          <h1>{tenantName || 'Employee Portal'}</h1>
           <p className="subtitle">Employee Schedule Portal</p>
         </div>
         
@@ -93,13 +132,10 @@ export default function ClientAuthGate({onSuccess}:{onSuccess:(fullName:string,i
             <input 
               value={employeeId} 
               onChange={e=>setEmployeeId(e.target.value)} 
-              placeholder="tenant@employeeID or just employeeID"
+              placeholder="Enter your employee ID"
               disabled={loading}
               autoFocus
             />
-            <small style={{color: '#666', fontSize: '13px', marginTop: '4px', display: 'block'}}>
-              Format: <code style={{background: '#f5f5f5', padding: '2px 6px', borderRadius: '3px'}}>tenant@121</code> or just <code style={{background: '#f5f5f5', padding: '2px 6px', borderRadius: '3px'}}>121</code>
-            </small>
           </div>
           <div className="form-group">
             <label>Password</label>
@@ -121,7 +157,7 @@ export default function ClientAuthGate({onSuccess}:{onSuccess:(fullName:string,i
         
         <div className="auth-info-box">
           <Info size={16} style={{display: 'inline-block', verticalAlign: 'middle', marginRight: '0.5rem'}} />
-          <strong>Default password:</strong> Your employee ID. For multi-tenant systems, use format: tenant@employeeID
+          <strong>Default password:</strong> Your employee ID
         </div>
       </div>
     </div>

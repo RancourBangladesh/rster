@@ -47,8 +47,10 @@ export interface ScheduleRequestChange {
   status: "pending"|"approved"|"rejected";
   type: "shift_change";
   created_at: string;
+  updated_at?: string;
   approved_at: string|null;
   approved_by: string|null;
+  admin_message?: string;
 }
 export interface ScheduleRequestSwap {
   id: string;
@@ -64,8 +66,10 @@ export interface ScheduleRequestSwap {
   status: "pending"|"approved"|"rejected";
   type: "swap";
   created_at: string;
+  updated_at?: string;
   approved_at: string|null;
   approved_by: string|null;
+  admin_message?: string;
 }
 export interface ScheduleRequestsFile {
   shift_change_requests: ScheduleRequestChange[];
@@ -103,6 +107,17 @@ export interface Tenant {
     organization_name?: string; // Display name for the organization
     logo_url?: string; // URL or base64 data for organization logo
   };
+  // Optional subscription info for self-serve tenants
+  subscription?: {
+    plan: 'monthly' | 'yearly';
+    status: 'pending' | 'active';
+    created_at: string; // when the signup happened
+    started_at?: string; // when activated by developer
+    expires_at?: string; // computed from started_at + duration
+  };
+  // Optional contact info provided during signup
+  contact_email?: string;
+  contact_phone?: string;
 }
 
 export interface TenantsFile {

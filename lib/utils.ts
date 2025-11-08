@@ -32,9 +32,17 @@ export function readJSON<T>(file: string, fallback: T): T {
 export function writeJSON(file: string, data: any) {
   ensureDataDir();
   try {
+    // Ensure parent directory exists
+    const dir = path.dirname(file);
+    fs.mkdirSync(dir, { recursive: true });
+    
+    console.log(`[writeJSON] Writing to file: ${file}`);
+    console.log(`[writeJSON] Data: ${JSON.stringify(data).substring(0, 200)}...`);
     fs.writeFileSync(file, JSON.stringify(data,null,2),'utf-8');
+    console.log(`[writeJSON] Successfully wrote to ${file}`);
   } catch (e) {
-    // Optional: console.error('writeJSON error', e);
+    console.error(`[writeJSON] ERROR writing to ${file}:`, e);
+    throw e;  // Re-throw to make sure it doesn't fail silently
   }
 }
 
@@ -144,4 +152,27 @@ export function arrayUnique<T>(arr: T[]) {
 
 export function sleep(ms:number) {
   return new Promise(r=>setTimeout(r,ms));
+}
+
+// ===== Subscription/date helpers =====
+export function addDays(dateIso: string, days: number) {
+  const d = new Date(dateIso);
+  d.setDate(d.getDate() + days);
+  return d.toISOString();
+}
+
+export function daysRemaining(untilIso?: string) {
+  if (!untilIso) return null;
+  const now = new Date();
+  const until = new Date(untilIso);
+  const diffMs = until.getTime() - now.getTime();
+  return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+}
+
+export function countdownColor(daysLeft: number | null) {
+  if (daysLeft === null) return 'gray';
+  if (daysLeft <= 2) return 'very-red';
+  if (daysLeft <= 5) return 'red';
+  if (daysLeft <= 15) return 'yellow';
+  return 'green';
 }

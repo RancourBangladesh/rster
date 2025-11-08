@@ -1,5 +1,6 @@
 import fetch from 'node-fetch';
-import { getGoogleLinks, setGoogle, getGoogleLinksForTenant, setGoogleForTenant } from './dataStore';
+import { getGoogleLinks, setGoogle } from './dataStore';
+import { getGoogleLinksForTenant, setGoogleForTenant } from './dataStore.tenant';
 import { RosterData } from './types';
 import { parseCsv } from './utils';
 
@@ -27,7 +28,7 @@ export async function syncGoogleSheets(): Promise<{ employees:number; sheets:num
 export async function syncGoogleSheetsForTenant(tenantId: string): Promise<{ employees:number; sheets:number }> {
   const links = getGoogleLinksForTenant(tenantId);
   const urls = Object.values(links);
-  if (!urls.length) throw new Error("No Google Sheets links configured");
+  if (!urls.length) throw new Error("No Google Sheets links configured for this tenant");
   const aggregated: RosterData = {teams:{}, headers:[], allEmployees:[]};
 
   for (const url of urls) {

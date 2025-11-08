@@ -343,11 +343,15 @@ export function addSwapRequest(r: Omit<import('./types').ScheduleRequestSwap,'id
   return newReq;
 }
 
-export function updateRequestStatus(id: string, status: 'approved'|'rejected', user: string) {
+export function updateRequestStatus(id: string, status: 'approved'|'rejected', user: string, adminMessage?: string) {
   const file = getScheduleRequests();
   const sc = file.shift_change_requests.find(r=>r.id===id);
   if (sc) {
     sc.status = status;
+    sc.updated_at = new Date().toISOString();
+    if (adminMessage) {
+      sc.admin_message = adminMessage;
+    }
     if (status==='approved') {
       sc.approved_at = new Date().toISOString();
       sc.approved_by = user;
@@ -360,6 +364,10 @@ export function updateRequestStatus(id: string, status: 'approved'|'rejected', u
   const sw = file.swap_requests.find(r=>r.id===id);
   if (sw) {
     sw.status = status;
+    sw.updated_at = new Date().toISOString();
+    if (adminMessage) {
+      sw.admin_message = adminMessage;
+    }
     if (status==='approved') {
       sw.approved_at = new Date().toISOString();
       sw.approved_by = user;
