@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import Logo from '@/components/Logo';
 import { User, Lock } from 'lucide-react';
+import { detectTenantFromWindow } from '@/lib/subdomain';
 import '../../../styles/auth-clean.css';
 
 export default function AdminLoginPage() {
@@ -10,7 +11,39 @@ export default function AdminLoginPage() {
   const [p,setP]=useState('');
   const [msg,setMsg]=useState('');
   const [loading,setLoading]=useState(false);
+  const [tenantInfo, setTenantInfo] = useState<{name: string; organizationName: string} | null>(null);
   const formRef = useRef<HTMLFormElement|null>(null);
+
+  useEffect(()=>{
+    // Check if accessed via subdomain to get tenant info
+    const subdomain = detectTenantFromWindow();
+    
+    if (subdomain) {
+      // Fetch tenant info for branding
+      fetch('/api/tenant/info-by-slug', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({slug: subdomain})
+      })
+      .then(res => {
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        return res.json();
+      })
+      .then(data => {
+        if (data.success && data.tenant) {
+          setTenantInfo({
+            name: data.tenant.name,
+            organizationName: data.tenant.organization_name || data.tenant.name
+          });
+        }
+      })
+      .catch(err => {
+        console.error('Failed to fetch tenant info:', err);
+      });
+    }
+  },[]);
 
   async function submit(e:React.FormEvent) {
     e.preventDefault();
@@ -49,13 +82,15 @@ export default function AdminLoginPage() {
     return ()=> window.removeEventListener('keydown', handler);
   },[]);
 
+  const brandName = tenantInfo?.organizationName || 'RosterBhai';
+
   return (
     <div className="admin-auth-shell">
       <div className="admin-auth-wrapper">
         <div className="admin-auth-header">
           <div className="brand-icon"><Logo size={50} /></div>
           <div className="brand-text">
-            <h1>RosterBhai <span>Admin</span></h1>
+            <h1>{brandName} <span>Admin</span></h1>
             <p className="tagline">Team Lead & Administrator Access</p>
           </div>
         </div>
@@ -102,7 +137,7 @@ export default function AdminLoginPage() {
         </form>
 
         <div className="admin-auth-footer">
-          <Link href="/" className="admin-auth-link">
+          <Link href="/employee" className="admin-auth-link">
             ← Back to Employee Portal
           </Link>
         </div>

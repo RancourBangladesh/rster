@@ -1,14 +1,16 @@
 # Multi-Tenant Roster Management System
 
-A modern, multi-tenant workforce roster management system built with Next.js (App Router + TypeScript). This system allows a single deployment to serve multiple organizations (tenants) with complete data isolation.
+A modern, multi-tenant workforce roster management system built with Next.js (App Router + TypeScript). This system allows a single deployment to serve multiple organizations (tenants) with complete data isolation and subdomain-based routing.
 
 ## 🎯 Key Features
 
 ### Multi-Tenancy
 - **Complete Data Isolation**: Each tenant has their own isolated data storage
+- **Subdomain Routing**: Each tenant gets their own subdomain (e.g., `rancour.rosterbhai.me`)
 - **Developer Portal**: Central management dashboard for creating and managing tenants
 - **Tenant-Scoped Authentication**: Separate login and session management per tenant
 - **Flexible Architecture**: Subdomain or path-based tenant routing
+- **Tenant Branding**: Customizable organization name and logo per tenant
 
 ### Roster Management
 - **Dual Data Layers**: Google Sheets sync + Admin modifications
@@ -133,7 +135,19 @@ styles/
 6. **Access the portals**
    - Developer Portal: http://localhost:3000/developer/login
    - Admin Panel: http://localhost:3000/admin/login (after creating a tenant)
-   - Employee Dashboard: http://localhost:3000
+   - Employee Dashboard: http://localhost:3000/employee
+
+---
+
+## 🌐 Subdomain Setup
+
+For production deployment with subdomain-based multi-tenancy, see **[SUBDOMAIN_SETUP.md](./SUBDOMAIN_SETUP.md)** for detailed configuration instructions.
+
+**Quick Overview:**
+- Each tenant gets their own subdomain: `tenant.yourdomain.com`
+- Configure wildcard DNS record: `*.yourdomain.com`
+- Employees access: `https://tenant.yourdomain.com/employee`
+- Admins access: `https://tenant.yourdomain.com/admin`
 
 ---
 
@@ -144,14 +158,16 @@ styles/
 1. **Login to Developer Portal** at `/developer/login`
 2. **Create a new tenant** with:
    - Tenant name
-   - URL slug (unique identifier)
+   - URL slug (unique identifier for subdomain)
    - Optional: Maximum users and employees
 3. **Manage tenants**: Activate/deactivate, view statistics
 4. **Create admin users** for each tenant
 
 ### For Tenant Admins
 
-1. **Login to Admin Panel** at `/admin/login`
+1. **Login to Admin Panel**:
+   - Via subdomain: `https://[tenant-slug].yourdomain.com/admin`
+   - Or localhost: `http://localhost:3000/admin/login`
 2. **Configure data sources**:
    - Add Google Sheets CSV links
    - Import roster data
@@ -164,7 +180,9 @@ styles/
 
 ### For Employees
 
-1. **Access dashboard** at root URL
+1. **Access dashboard**:
+   - Via subdomain: `https://[tenant-slug].yourdomain.com/employee`
+   - Or localhost: `http://localhost:3000/employee`
 2. **Enter employee ID** to view schedule
 3. **View shift information**: Today, tomorrow, upcoming days
 4. **Submit requests**: Change shifts or swap with colleagues

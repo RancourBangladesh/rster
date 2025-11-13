@@ -2,6 +2,30 @@ import fs from 'fs';
 import path from 'path';
 import { DATA_DIR } from './constants';
 import { parse } from 'csv-parse/sync';
+import { NextRequest } from 'next/server';
+import { getTenantBySlug } from './tenants';
+
+/**
+ * Extract tenant slug from request headers
+ * This works with the middleware which sets x-tenant-slug header
+ */
+export function getTenantSlugFromRequest(request: NextRequest): string | null {
+  return request.headers.get('x-tenant-slug');
+}
+
+/**
+ * Get tenant ID from request (via subdomain)
+ * Returns null if no tenant found or tenant is inactive
+ */
+export function getTenantIdFromRequest(request: NextRequest): string | null {
+  const slug = getTenantSlugFromRequest(request);
+  if (!slug) return null;
+  
+  const tenant = getTenantBySlug(slug);
+  if (!tenant || !tenant.is_active) return null;
+  
+  return tenant.id;
+}
 
 /**
  * Ensure data directory exists (idempotent).
